@@ -1,0 +1,170 @@
+/* :root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: #646cff;
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  a:hover {
+    color: #747bff;
+  }
+  button {
+    background-color: #f9f9f9;
+  }
+} */
+ 
+@import "tailwindcss";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+/* Optional: smooth fonts */
+html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+/* Force any bg-neutral-900 to be light */
+/* .bg-neutral-900 { background-color: #1f2937 !important; } */
+.bg-neutral-900 { background-color: rgb(23 23 23) !important; }
+
+/* Force the header to be fully opaque white on all browsers */
+.header-solid {
+  background-color: #ffffff !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  opacity: 1 !important;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Apple-style, clean, modern base (Tailwind-only) */
+@layer base {
+  :root {
+    --radius: 12px;
+  }
+
+  html {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-size: 16px;
+  }
+
+  body {
+    @apply bg-white text-slate-800 antialiased;
+    margin: 0;
+    line-height: 1.45;
+  }
+
+  h1, h2, h3, h4 { font-weight: 600; color: inherit }
+  a { @apply text-indigo-600 hover:text-indigo-700 }
+}
+
+@media (prefers-color-scheme: dark) {
+  @layer base {
+    body { @apply bg-slate-900 text-slate-100 }
+    a { @apply text-indigo-300 hover:text-indigo-200 }
+  }
+}
+
+@layer components {
+  .header {
+    @apply w-full flex items-center justify-between py-4 px-6;
+    background-color: rgba(255,255,255,0.6);
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+  }
+
+  .brand {
+    @apply text-lg font-semibold tracking-tight;
+  }
+
+  .btn {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium shadow-sm transition-colors duration-150;
+    background-color: #6366f1; /* indigo-500 */
+    color: white;
+  }
+  .btn:hover { filter: brightness(0.95); }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-slate-700 bg-transparent border border-slate-200;
+  }
+  .btn-ghost:hover { @apply bg-slate-100 }
+
+  .card {
+    @apply bg-white rounded-2xl p-6 shadow-md;
+    border: 1px solid rgba(15, 23, 42, 0.04);
+  }
+
+  .input {
+    @apply w-full px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-800;
+  }
+
+  .glass {
+    background-color: rgba(255,255,255,0.6);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    border-radius: var(--radius);
+  }
+}
+
+@layer utilities {
+  .shadow-apple { box-shadow: 0 6px 30px rgba(2,6,23,0.08); }
+}
+
+.container-max { max-width: 980px; margin-left: auto; margin-right: auto; padding-left: 1rem; padding-right: 1rem }

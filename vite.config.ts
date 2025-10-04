@@ -5,16 +5,11 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   base: "/emergefy-core-demo/",
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      input: {
+        home: 'index.html',
+      },
+    },
+  },
 })
-
-
-// export default defineConfig({
-//   plugins: [react()],
-//   build: {
-//     rollupOptions: {
-//       input: {
-//         home: 'index.html',
-//       },
-//     },
-//   },
-// })

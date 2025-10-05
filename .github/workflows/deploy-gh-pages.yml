@@ -29,6 +29,15 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Copy CNAME to dist (if present)
+        run: |
+          if [ -f CNAME ]; then
+            echo "Found CNAME in repo root. Copying into dist/";
+            cp CNAME dist/CNAME;
+          else
+            echo "No CNAME file in repo root. Skipping.";
+          fi
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:

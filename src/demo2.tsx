@@ -1061,13 +1061,11 @@ function FlowDemo() {
             <h3 className="text-xl font-semibold tracking-tight">Playbooks</h3>
             <p className="text-sm text-neutral-500">Straightforward steps. No fluff.</p>
           </div>
-          <StepRail steps={steps.map((s) => ({ key: s.key, label: s.label }))} active={active} onSelect={(i) => setActive(i)} />
-          <button
-            onClick={() => openStep(active)}
-            className="mt-3 w-full border border-neutral-200 rounded-md px-3 py-2 text-sm hover:bg-neutral-50"
-          >
-            Open step
-          </button>
+          <StepRail
+            steps={steps.map((s) => ({ key: s.key, label: s.label }))}
+            active={active}
+            onSelect={(i) => openStep(i)}
+          />
         </div>
 
         {/* right: content */}
@@ -1178,12 +1176,7 @@ function FlowDemo() {
           </div>
 
           <div className="flex items-center justify-between">
-            <button
-              onClick={() => openStep(active)}
-              className="border border-neutral-200 rounded-md px-3 py-2 text-sm hover:bg-neutral-50"
-            >
-              Open step {active + 1}
-            </button>
+            <span />
             <button
               onClick={approveAndSend}
               className="bg-neutral-900 text-white rounded-md px-4 py-2 text-sm"

@@ -279,7 +279,7 @@ function WizardModal({
 -------------------------------------------------*/
 
 export default function InteractiveDemoPage() {
-  const [screen, setScreen] = useState<"agent" | "flow" | "dashboard">("agent");
+  const [screen, setScreen] = useState<"agent" | "flow" | "dashboard">("flow");
   useEffect(() => { track("page_view", { page: "vertical_ai_agent_ops_copilot" }); runTestsOnce(); }, []);
   return (
     <div className="min-h-screen bg-white text-neutral-900 antialiased py-8">
@@ -358,41 +358,68 @@ function MobileNav({ active, onChange }: { active: "agent" | "flow" | "dashboard
 }
 
 function DemoBell() {
+  // Keep panel closed initially
   const [open, setOpen] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setOpen(true), 1200); return () => clearTimeout(t); }, []);
+
+  // Your demo notifications
+  const notifications = useMemo(
+    () => [
+      { id: "n1", title: "Pilot created", desc: "A pilot was created with 120 guests", icon: <IconStar /> },
+      { id: "n2", title: "Segment ready", desc: "420 guests segmented by recency", icon: <IconUsers /> },
+    ],
+    []
+  );
+
+  const count = notifications.length;
+
   return (
     <div className="relative">
-      <button onClick={() => { setOpen((s) => !s); track("open_notifications"); }} aria-label="notifications" className="p-2 rounded-md border border-neutral-200 hover:bg-neutral-50">
+      <button
+        onClick={() => {
+          setOpen((s) => !s);
+          track("open_notifications");
+        }}
+        aria-label="notifications"
+        className="relative p-2 rounded-md border border-neutral-200 hover:bg-neutral-50"
+      >
         <IconBell />
+        {/* Badge */}
+        {count > 0 && (
+          <span
+            aria-label={`${count} notifications`}
+            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-neutral-900 text-white text-[10px] leading-[18px] text-center font-semibold"
+          >
+            {count > 99 ? "99+" : count}
+          </span>
+        )}
       </button>
+
       {open && (
         <div className="absolute right-0 mt-2 w-80 bg-white border border-neutral-200 rounded-2xl shadow p-3 z-50">
           <div className="flex items-center justify-between text-sm">
             <div className="font-semibold">Notifications</div>
-            <button onClick={() => setOpen(false)} className="p-1 rounded-md hover:bg-neutral-50"><IconX /></button>
+            <button onClick={() => setOpen(false)} className="p-1 rounded-md hover:bg-neutral-50">
+              <IconX />
+            </button>
           </div>
           <div className="mt-2 text-xs text-neutral-600">Recent events appear here when you run the flow.</div>
           <ul className="mt-3 space-y-2 text-sm">
-            <li className="flex items-start gap-2">
-              <div className="p-2 rounded-xl bg-neutral-100"><IconStar /></div>
-              <div>
-                <div className="font-medium">Pilot created</div>
-                <div className="text-xs text-neutral-500">A pilot was created with 120 guests</div>
-              </div>
-            </li>
-            <li className="flex items-start gap-2">
-              <div className="p-2 rounded-xl bg-neutral-100"><IconUsers /></div>
-              <div>
-                <div className="font-medium">Segment ready</div>
-                <div className="text-xs text-neutral-500">420 guests segmented by recency</div>
-              </div>
-            </li>
+            {notifications.map((n) => (
+              <li key={n.id} className="flex items-start gap-2">
+                <div className="p-2 rounded-xl bg-neutral-100">{n.icon}</div>
+                <div>
+                  <div className="font-medium">{n.title}</div>
+                  <div className="text-xs text-neutral-500">{n.desc}</div>
+                </div>
+              </li>
+            ))}
           </ul>
         </div>
       )}
     </div>
   );
 }
+
 
 /* ------------------------------------------------
    Agent (Ops Copilot)

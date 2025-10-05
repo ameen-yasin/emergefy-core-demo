@@ -101,14 +101,14 @@ interface BranchChoice { label: string; score: number }
 interface Verification { label: string; ok: boolean }
 interface ToolCall { id: number; name: string; input: { segment: string; offer: string }; status: "running" | "ok" | "error"; output?: { preview?: { reactivated: number; revenue: number } } }
 
-interface ConnectionMap {
-  csv: boolean;
-  gsheet: boolean;
-  square: boolean;
-  toast: boolean;
-  shopifypos: boolean;
-  foodics: boolean;
-}
+// interface ConnectionMap {
+//   csv: boolean;
+//   gsheet: boolean;
+//   square: boolean;
+//   toast: boolean;
+//   shopifypos: boolean;
+//   foodics: boolean;
+// }
 
 interface Kpi { mrr: number; activePilots: number; projectedLift: number; last24: number[] }
 interface SimRecord { id: string; time: number; audience: number; reactivated: number; type: string }
@@ -368,10 +368,10 @@ function DemoBell() {
       {open && (
         <div className="absolute right-0 mt-2 w-80 bg-white border border-neutral-200 rounded-2xl shadow p-3 z-50">
           <div className="flex items-center justify-between text-sm">
-            <div className="font-semibold">Demo notifications</div>
+            <div className="font-semibold">Notifications</div>
             <button onClick={() => setOpen(false)} className="p-1 rounded-md hover:bg-neutral-50"><IconX /></button>
           </div>
-          <div className="mt-2 text-xs text-neutral-600">Recent demo events appear here when you run the flow.</div>
+          <div className="mt-2 text-xs text-neutral-600">Recent events appear here when you run the flow.</div>
           <ul className="mt-3 space-y-2 text-sm">
             <li className="flex items-start gap-2">
               <div className="p-2 rounded-xl bg-neutral-100"><IconStar /></div>
@@ -749,7 +749,7 @@ function RecentEvents() {
     }, 1200);
     return () => { mounted = false; clearInterval(id); };
   }, []);
-  if (events.length === 0) return <div className="text-sm text-neutral-500 mt-2">No demo events yet — run a playbook.</div>;
+  if (events.length === 0) return <div className="text-sm text-neutral-500 mt-2">No events yet — run a playbook.</div>;
   return (
     <ul className="mt-2 space-y-2 text-sm">
       {events.map((e) => (
@@ -798,7 +798,7 @@ function LiveDashboard() {
       <div className="flex items-start justify-between gap-6">
         <div>
           <h3 className="text-lg font-semibold">Impact</h3>
-          <div className="text-xs text-neutral-500 mt-1">Snapshot of reactivations and demo revenue.</div>
+          <div className="text-xs text-neutral-500 mt-1">Snapshot of reactivations and revenue.</div>
         </div>
         <div className="flex gap-3">
           <KpiTile label="MRR (demo)" value={`$${kpi.mrr}`} />
@@ -818,254 +818,462 @@ function LiveDashboard() {
         </div>
       </div>
       <div className="mt-4 grid md:grid-cols-2 gap-4">
-        <div className="p-4 rounded-2xl border border-neutral-200 bg-white"><div className="font-semibold">Recent demo events</div><RecentEvents /></div>
+        <div className="p-4 rounded-2xl border border-neutral-200 bg-white"><div className="font-semibold">Recent events</div><RecentEvents /></div>
         <div className="p-4 rounded-2xl border border-neutral-200 bg-white"><div className="font-semibold">Demo tips</div><ul className="mt-2 text-sm space-y-2 text-neutral-600"><li>Toggle reasoning for different audiences.</li><li>Use Playbooks for fast, safe defaults.</li><li>Show verification checks before approve.</li></ul></div>
       </div>
     </section>
   );
 }
 
-/* ------------------------------------------------
-   Playbooks (Flow) — unchanged from previous "slim" version
--------------------------------------------------*/
+/* ===================== Playbooks (Swiss / Industrial) ===================== */
+/* Minimal primitives */
 
+function MinimalStat({ k, v }: { k: string; v: string | number }) {
+  return (
+    <div className="flex flex-col border border-neutral-200 rounded-md p-3">
+      <span className="text-[11px] uppercase tracking-wide text-neutral-500">{k}</span>
+      <span className="mt-1 text-2xl font-semibold tabular-nums">{v}</span>
+    </div>
+  );
+}
+
+function RadioList<T extends string>({
+  items,
+  value,
+  onChange,
+}: {
+  items: { id: T; title: string; meta?: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="divide-y divide-neutral-200 border border-neutral-200 rounded-md">
+      {items.map((it) => {
+        const on = it.id === value;
+        return (
+          <button
+            key={it.id}
+            onClick={() => onChange(it.id)}
+            className={`w-full p-3 text-left grid grid-cols-[20px_1fr_auto] items-center gap-3 hover:bg-neutral-50 ${
+              on ? "bg-neutral-50" : ""
+            }`}
+          >
+            <span
+              aria-hidden
+              className={`h-4 w-4 rounded-full border ${
+                on ? "border-neutral-900" : "border-neutral-400"
+              } grid place-items-center`}
+            >
+              {on && <span className="h-2 w-2 rounded-full bg-neutral-900" />}
+            </span>
+            <span className="font-medium">{it.title}</span>
+            {it.meta && <span className="text-xs text-neutral-500">{it.meta}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function CheckboxGrid({
+  options,
+  values,
+  onToggle,
+}: {
+  options: { id: string; label: string }[];
+  values: Record<string, boolean>;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {options.map((o) => {
+        const on = !!values[o.id];
+        return (
+          <button
+            key={o.id}
+            onClick={() => onToggle(o.id)}
+            className={`border rounded-md px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-neutral-50 ${
+              on ? "border-neutral-900" : "border-neutral-200"
+            }`}
+          >
+            <span
+              aria-hidden
+              className={`h-4 w-4 rounded-sm border grid place-items-center ${
+                on ? "border-neutral-900 bg-neutral-900" : "border-neutral-400"
+              }`}
+            >
+              {on && <span className="h-2 w-2 bg-white" />}
+            </span>
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function StepRail({
+  steps,
+  active,
+  onSelect,
+}: {
+  steps: { key: string; label: string }[];
+  active: number;
+  onSelect: (i: number) => void;
+}) {
+  return (
+    <div className="border border-neutral-200 rounded-md">
+      {steps.map((s, i) => (
+        <button
+          key={s.key}
+          onClick={() => onSelect(i)}
+          className={`w-full px-3 py-2 text-left flex items-center gap-3 border-b last:border-b-0 border-neutral-200 hover:bg-neutral-50 ${
+            i === active ? "bg-neutral-50" : ""
+          }`}
+        >
+          <span
+            className={`h-6 w-6 rounded-sm grid place-items-center text-xs font-semibold ${
+              i === active ? "bg-neutral-900 text-white" : "bg-neutral-200 text-neutral-800"
+            }`}
+          >
+            {i + 1}
+          </span>
+          <span className="text-sm">{s.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* === Replacement FlowDemo === */
 function FlowDemo() {
   const steps = [
-    { key: "connect", label: "Connect", detail: "Link POS or upload order CSV", title: "Connect your data", body: "For the demo, we simulate a POS connection or a CSV upload so you can jump straight to value." },
-    { key: "audience", label: "Audience", detail: "Auto-segment guests by recency & spend", title: "Choose who to reach", body: "Pick a prebuilt segment. We estimate size and likelihood to come back based on recency and spend." },
-    { key: "offer", label: "Offer", detail: "Pick smart, margin-safe offers", title: "Choose the nudge", body: "Select a gentle incentive. We balance expected lift with margin impact to protect profitability." },
-    { key: "send", label: "Schedule", detail: "Pick channel & time", title: "How and when to send", body: "Pick a channel and timing. Defaults are sensible for first runs; you can tweak anytime." },
-    { key: "measure", label: "Review", detail: "Preview results & approve", title: "Review and approve", body: "Double-check the plan and the projected impact. When you approve, we schedule it and track results." },
+    { key: "connect", label: "Connect", title: "Connect data", body: "Use CSV or Sheets; optionally toggle POS." },
+    { key: "audience", label: "Audience", title: "Choose audience", body: "Pick a predefined segment." },
+    { key: "offer", label: "Offer", title: "Choose offer", body: "Margin-safe incentives for quick wins." },
+    { key: "send", label: "Schedule", title: "Send plan", body: "Select channel and timing." },
+    { key: "measure", label: "Review", title: "Review & approve", body: "Confirm impact and schedule." },
   ] as const;
 
-  const [active, setActive] = useState<number>(1);
+  const [active, setActive] = useState<number>(0);
   const [modalOpen, setModalOpen] = useState<boolean>(false);
-  const [modalStep, setModalStep] = useState<number>(1);
+  const [modalStep, setModalStep] = useState<number>(0);
   const [selectedSegment, setSelectedSegment] = useState<string>("recent-lapsed");
   const [selectedOffer, setSelectedOffer] = useState<string>("10-off");
   const [scheduling, setScheduling] = useState<{ when: string; channel: string }>({ when: "In 1 hour", channel: "SMS" });
   const [done, setDone] = useState<DoneResult | null>(null);
 
-  const segments = useMemo<Segment[]>(() => [
-    { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 120, estReact: 0.09 },
-    { id: "vip", title: "VIP frequent", size: 42, estReact: 0.12 },
-    { id: "low-value", title: "Low spenders", size: 220, estReact: 0.03 },
-  ], []);
-  const offers = useMemo<Offer[]>(() => [
-    { id: "10-off", title: "10% off next order", marginImpact: -6, estLift: 0.08 },
-    { id: "bundle", title: "Meal bundle (save $3)", marginImpact: -3, estLift: 0.1 },
-    { id: "free-drink", title: "Free drink w/order $10+", marginImpact: -4, estLift: 0.06 },
-  ], []);
+  // business data (unchanged)
+  const segments = useMemo<Segment[]>(
+    () => [
+      { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 120, estReact: 0.09 },
+      { id: "vip", title: "VIP frequent", size: 42, estReact: 0.12 },
+      { id: "low-value", title: "Low spenders", size: 220, estReact: 0.03 },
+    ],
+    []
+  );
+  const offers = useMemo<Offer[]>(
+    () => [
+      { id: "10-off", title: "10% off next order", marginImpact: -6, estLift: 0.08 },
+      { id: "bundle", title: "Meal bundle (save $3)", marginImpact: -3, estLift: 0.1 },
+      { id: "free-drink", title: "Free drink w/order $10+", marginImpact: -4, estLift: 0.06 },
+    ],
+    []
+  );
 
   const { reactivated, revenue, seg, off } = computePreviewMetrics(segments, offers, selectedSegment, selectedOffer);
 
-  const [connections, setConnections] = useState<ConnectionMap>({ csv: true, gsheet: false, square: false, toast: false, shopifypos: false, foodics: false });
+  // connections per your trimmed list
+  const [connections, setConnections] = useState<Record<string, boolean>>({
+    csv: true,
+    gsheet: false,
+    square: false,
+    toast: false,
+    shopifypos: false,
+    foodics: false,
+  });
+  const toggleConn = (k: string) => setConnections((c) => ({ ...c, [k]: !c[k] }));
+
+  function openStep(i: number) {
+    const idx = Math.max(0, Math.min(steps.length - 1, i));
+    setActive(idx);
+    setModalStep(idx);
+    setModalOpen(true);
+    track("step_open_modal", { step: steps[idx].key });
+  }
+  const nextStep = () => openStep(modalStep + 1);
+  const prevStep = () => openStep(modalStep - 1);
 
   function approveAndSend() {
     const record: SimRecord = { id: String(Date.now()), time: Date.now(), audience: seg.size, reactivated, type: selectedOffer || "unknown" };
     try {
-      if (typeof window === "undefined") return;
       const raw = localStorage.getItem(STORAGE_KEY) || "{}";
       const obj = JSON.parse(raw);
       const simHistory: SimRecord[] = Array.isArray(obj.simHistory) ? obj.simHistory : [];
       simHistory.unshift(record);
       obj.simHistory = simHistory.slice(0, 20);
-      const kpi = (obj.kpi as Kpi) || { mrr: 4200, activePilots: 3, projectedLift: 12, last24: [] };
+
+      const kpi: Kpi = obj.kpi || { mrr: 4200, activePilots: 3, projectedLift: 12, last24: [] };
       kpi.mrr = Math.max(4200, (kpi.mrr || 4200) + Math.round(reactivated * 2));
-      kpi.activePilots = Math.min(10, kpi.activePilots || 3);
       obj.kpi = kpi;
+
       localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
       track("flow_approve_send", { segment: selectedSegment, offer: selectedOffer, reactivated, when: scheduling.when, channel: scheduling.channel });
+
       setDone({ audience: seg.size, reactivated, revenue, segment: seg.title, offer: off.title, when: scheduling.when, channel: scheduling.channel });
       setModalOpen(true);
-      if (typeof document !== "undefined") {
-        const el = document.createElement("div");
-        el.textContent = `Scheduled — est reactivations: ${reactivated}`;
-        el.className = "fixed right-4 bottom-6 bg-neutral-900 text-white px-4 py-2 rounded shadow";
-        document.body.appendChild(el);
-        setTimeout(() => { try { document.body.removeChild(el);     } catch (err) { console.error(err); }
- }, 2600);
-      }
-    } catch (err) { console.error(err); }
+    } catch {/* noop */}
   }
 
-  const openStep = (i: number) => { setActive(i); setModalStep(i); setModalOpen(true); track("step_open_modal", { step: steps[i].key }); };
-  const nextStep = () => setModalStep((s) => Math.min(steps.length - 1, s + 1));
-  const prevStep = () => setModalStep((s) => Math.max(0, s - 1));
-  const toggleConn = (k: keyof ConnectionMap) => setConnections((c) => ({ ...c, [k]: !c[k] }));
-
   return (
-    <section id="flow" className="rounded-2xl border border-neutral-200 p-6 bg-neutral-50">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Playbooks</h3>
-        <div className="text-sm text-neutral-500">Each step opens as a focused popup</div>
-      </div>
-
-      <div className="mt-4 grid md:grid-cols-3 gap-4">
-        <div className="md:col-span-1">
-          <div className="space-y-2">
-            {steps.map((s, i) => (
-              <div key={s.key} className={`p-3 rounded-2xl border ${i === active ? "bg-white shadow-sm border-neutral-200" : "bg-transparent border-neutral-200"}`}>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="font-semibold">{s.label}</div>
-                    <div className="text-xs text-neutral-500 mt-1">{s.detail}</div>
-                  </div>
-                  <div className="text-xs text-neutral-400">{i + 1}</div>
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <button onClick={() => openStep(i)} className="px-2 py-1 rounded-md bg-neutral-900 text-white text-xs">Open</button>
-                </div>
-              </div>
-            ))}
+    <section id="flow" className="rounded-2xl border border-neutral-200 p-6 bg-white">
+      <div className="grid grid-cols-12 gap-6">
+        {/* left: rail */}
+        <div className="col-span-12 md:col-span-3">
+          <div className="mb-3">
+            <h3 className="text-xl font-semibold tracking-tight">Playbooks</h3>
+            <p className="text-sm text-neutral-500">Straightforward steps. No fluff.</p>
           </div>
+          <StepRail steps={steps.map((s) => ({ key: s.key, label: s.label }))} active={active} onSelect={(i) => setActive(i)} />
+          <button
+            onClick={() => openStep(active)}
+            className="mt-3 w-full border border-neutral-200 rounded-md px-3 py-2 text-sm hover:bg-neutral-50"
+          >
+            Open step
+          </button>
         </div>
 
-        <div className="md:col-span-2 p-4 rounded-2xl border border-neutral-200 bg-white">
-          <div className="text-xs text-neutral-500">Preview</div>
-          <div className="mt-2 grid md:grid-cols-3 gap-2">
-            <StatCard label="Audience" value={seg.size} />
-            <StatCard label="Est. Reactivations" value={reactivated} />
-            <StatCard label="Projected Sales" value={`$${revenue}`} />
+        {/* right: content */}
+        <div className="col-span-12 md:col-span-9">
+          {/* preview stats */}
+          <div className="grid md:grid-cols-3 gap-3">
+            <MinimalStat k="Audience" v={seg.size} />
+            <MinimalStat k="Est. Reactivations" v={reactivated} />
+            <MinimalStat k="Projected Sales" v={`$${revenue}`} />
           </div>
-          <div className="mt-3 text-xs text-neutral-500">Tip: Open the steps on the left to configure audience, offer, and schedule.</div>
-        </div>
-      </div>
 
-      <WizardModal open={modalOpen} onClose={() => { setModalOpen(false); setDone(null); }} stepText={`Step ${modalStep + 1} of ${steps.length}`}>
-        {!done ? (
-          <>
-            <div className="flex items-start justify-between gap-3">
+          <div className="my-6 h-px w-full bg-neutral-200" />
+
+          {/* connect */}
+          <div className="mb-6">
+            <div className="mb-2">
+              <div className="text-[11px] uppercase tracking-wide text-neutral-500">Step 1</div>
+              <div className="text-lg font-semibold">Connect</div>
+              <div className="text-sm text-neutral-600">{steps[0].body}</div>
+            </div>
+            <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <div className="font-semibold text-base">{steps[modalStep].title}</div>
-                <div className="text-xs text-neutral-600 mt-1">{steps[modalStep].body}</div>
+                <div className="text-xs font-medium text-neutral-700 mb-2">File imports</div>
+                <CheckboxGrid
+                  options={[
+                    { id: "csv", label: "Upload CSV" },
+                    { id: "gsheet", label: "Google Sheets" },
+                  ]}
+                  values={connections}
+                  onToggle={toggleConn}
+                />
+              </div>
+              <div>
+                <div className="text-xs font-medium text-neutral-700 mb-2">POS & ordering</div>
+                <CheckboxGrid
+                  options={[
+                    { id: "square", label: "Square POS" },
+                    { id: "toast", label: "Toast POS" },
+                    { id: "shopifypos", label: "Shopify POS" },
+                    { id: "foodics", label: "Foodics" },
+                  ]}
+                  values={connections}
+                  onToggle={toggleConn}
+                />
               </div>
             </div>
+            <div className="mt-2 text-xs text-neutral-500">Demo only — no external data transmitted.</div>
+          </div>
 
+          {/* audience */}
+          <div className="mb-6">
+            <div className="mb-2">
+              <div className="text-[11px] uppercase tracking-wide text-neutral-500">Step 2</div>
+              <div className="text-lg font-semibold">Audience</div>
+            </div>
+            <RadioList
+              items={segments.map((s) => ({ id: s.id as string, title: s.title, meta: `${s.size} guests` }))}
+              value={selectedSegment as string}
+              onChange={(v) => setSelectedSegment(v)}
+            />
+          </div>
+
+          {/* offer */}
+          <div className="mb-6">
+            <div className="mb-2">
+              <div className="text-[11px] uppercase tracking-wide text-neutral-500">Step 3</div>
+              <div className="text-lg font-semibold">Offer</div>
+            </div>
+            <RadioList
+              items={offers.map((o) => ({ id: o.id as string, title: o.title }))}
+              value={selectedOffer as string}
+              onChange={(v) => setSelectedOffer(v)}
+            />
+            <ul className="mt-2 text-xs grid grid-cols-3 gap-2">
+              <li className="border border-neutral-200 rounded-md p-2 text-center">Margin cap ≤ 6%</li>
+              <li className="border border-neutral-200 rounded-md p-2 text-center">Brand-safe copy ✓</li>
+              <li className="border border-neutral-200 rounded-md p-2 text-center">Audience fit ✓</li>
+            </ul>
+          </div>
+
+          {/* schedule */}
+          <div className="mb-6">
+            <div className="mb-2">
+              <div className="text-[11px] uppercase tracking-wide text-neutral-500">Step 4</div>
+              <div className="text-lg font-semibold">Schedule</div>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <RadioList
+                items={[
+                  { id: "SMS", title: "SMS" },
+                  { id: "Email", title: "Email" },
+                  { id: "Push", title: "Push" },
+                ]}
+                value={scheduling.channel }
+                onChange={(v) => setScheduling((s) => ({ ...s, channel: v }))}
+              />
+              <RadioList
+                items={[
+                  { id: "In 1 hour", title: "In 1 hour" },
+                  { id: "Tonight 7pm", title: "Tonight 7pm" },
+                  { id: "Tomorrow morning", title: "Tomorrow morning" },
+                ]}
+                value={scheduling.when}
+                onChange={(v) => setScheduling((s) => ({ ...s, when: v }))}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => openStep(active)}
+              className="border border-neutral-200 rounded-md px-3 py-2 text-sm hover:bg-neutral-50"
+            >
+              Open step {active + 1}
+            </button>
+            <button
+              onClick={approveAndSend}
+              className="bg-neutral-900 text-white rounded-md px-4 py-2 text-sm"
+            >
+              Approve & Schedule
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Focused step modal using your existing WizardModal */}
+      <WizardModal
+        open={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setDone(null);
+        }}
+        stepText={`Step ${modalStep + 1} of ${steps.length}`}
+      >
+        {!done ? (
+          <>
+            <div className="mb-2">
+              <div className="text-lg font-semibold">{steps[modalStep].title}</div>
+              <div className="text-sm text-neutral-600">{steps[modalStep].body}</div>
+            </div>
             {steps[modalStep].key === "connect" && (
-              <div className="mt-3 text-sm space-y-4">
+              <div className="mt-3 space-y-4 text-sm">
                 <div>
                   <div className="text-xs font-medium text-neutral-700 mb-2">File imports</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {[
-                      { k: "csv", label: "Upload CSV" },
-                      { k: "gsheet", label: "Google Sheets" },
-                    ].map(({ k, label }) => {
-                      const on = connections[k as keyof ConnectionMap];
-                      return (
-                        <button key={k} onClick={() => toggleConn(k as keyof ConnectionMap)} className={`group flex items-center justify-between rounded-xl border px-3 py-2 transition ${on ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 bg-white hover:bg-neutral-50"}`}>
-                          <span className="text-[13px] font-medium">{label}</span>
-                          <span className={`h-5 w-9 rounded-full transition ${on ? "bg-white/20" : "bg-neutral-200"}`}>
-                            <span className={`block h-5 w-5 rounded-full bg-white shadow transform transition ${on ? "translate-x-4" : "translate-x-0"}`} />
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <CheckboxGrid
+                    options={[
+                      { id: "csv", label: "Upload CSV" },
+                      { id: "gsheet", label: "Google Sheets" },
+                    ]}
+                    values={connections}
+                    onToggle={toggleConn}
+                  />
                 </div>
-
                 <div>
-                  <div className="text-xs font-medium text-neutral-700 mb-2">POS &amp; ordering</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {[
-                      { k: "square", label: "Square POS" },
-                      { k: "toast", label: "Toast POS" },
-                      { k: "shopifypos", label: "Shopify POS" },
-                      { k: "foodics", label: "Foodics" },
-                    ].map(({ k, label }) => {
-                      const on = connections[k as keyof ConnectionMap];
-                      return (
-                        <button key={k} onClick={() => toggleConn(k as keyof ConnectionMap)} className={`group flex items-center justify-between rounded-xl border px-3 py-2 transition ${on ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 bg-white hover:bg-neutral-50"}`}>
-                          <span className="text-[13px] font-medium">{label}</span>
-                          <span className={`h-5 w-9 rounded-full transition ${on ? "bg-white/20" : "bg-neutral-200"}`}>
-                            <span className={`block h-5 w-5 rounded-full bg-white shadow transform transition ${on ? "translate-x-4" : "translate-x-0"}`} />
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <div className="text-xs font-medium text-neutral-700 mb-2">POS & ordering</div>
+                  <CheckboxGrid
+                    options={[
+                      { id: "square", label: "Square POS" },
+                      { id: "toast", label: "Toast POS" },
+                      { id: "shopifypos", label: "Shopify POS" },
+                      { id: "foodics", label: "Foodics" },
+                    ]}
+                    values={connections}
+                    onToggle={toggleConn}
+                  />
                 </div>
-
-                <div className="text-xs text-neutral-500">This is a simulation for the demo — no external data is transmitted.</div>
+                <div className="text-xs text-neutral-500">Demo only — no external data transmitted.</div>
               </div>
             )}
-
             {steps[modalStep].key === "audience" && (
-              <div className="mt-3 text-sm space-y-3">
-                <div className="text-xs text-neutral-500">Select a segment</div>
-                <ChoicePills options={segments.map((s) => ({ id: s.id as string, label: s.title, sub: `${s.size} guests` }))} value={selectedSegment as string} onChange={(v) => setSelectedSegment(v)} />
-                <div className="text-xs text-neutral-600">Estimated reactivation rate adapts by recency/spend.</div>
-              </div>
+              <RadioList
+                items={segments.map((s) => ({ id: s.id as string, title: s.title, meta: `${s.size} guests` }))}
+                value={selectedSegment as string}
+                onChange={(v) => setSelectedSegment(v)}
+              />
             )}
-
             {steps[modalStep].key === "offer" && (
-              <div className="mt-3 text-sm space-y-3">
-                <div className="text-xs text-neutral-500">Choose an offer</div>
-                <ChoicePills options={offers.map((o) => ({ id: o.id as string, label: o.title }))} value={selectedOffer as string} onChange={(v) => setSelectedOffer(v)} />
-                <ul className="text-xs grid grid-cols-3 gap-2">
-                  <li className="p-2 border border-neutral-200 rounded-xl text-center">Margin cap ≤ 6%</li>
-                  <li className="p-2 border border-neutral-200 rounded-xl text-center">Brand-safe copy ✓</li>
-                  <li className="p-2 border border-neutral-200 rounded-xl text-center">Audience fit ✓</li>
-                </ul>
-              </div>
+              <RadioList
+                items={offers.map((o) => ({ id: o.id as string, title: o.title }))}
+                value={selectedOffer as string}
+                onChange={(v) => setSelectedOffer(v)}
+              />
             )}
-
             {steps[modalStep].key === "send" && (
-              <div className="mt-3 text-sm space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <div className="text-xs text-neutral-500 mb-1">Channel</div>
-                    <ChoicePills options={[{ id: "SMS", label: "SMS" }, { id: "Email", label: "Email" }, { id: "Push", label: "Push" }]} value={scheduling.channel as "SMS" | "Email" | "Push"} onChange={(v) => setScheduling((s) => ({ ...s, channel: v }))} />
-                  </div>
-                  <div>
-                    <div className="text-xs text-neutral-500 mb-1">Send time</div>
-                    <ChoicePills options={[{ id: "In 1 hour", label: "In 1 hour" }, { id: "Tonight 7pm", label: "Tonight 7pm" }, { id: "Tomorrow morning", label: "Tomorrow morning" }]} value={scheduling.when as "In 1 hour" | "Tonight 7pm" | "Tomorrow morning"} onChange={(v) => setScheduling((s) => ({ ...s, when: v }))} />
-                  </div>
-                </div>
-                <div className="text-xs text-neutral-600">Defaults are tuned for quick wins; you can refine later.</div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <RadioList
+                  items={[{ id: "SMS", title: "SMS" }, { id: "Email", title: "Email" }, { id: "Push", title: "Push" }]}
+                  value={scheduling.channel}
+                  onChange={(v) => setScheduling((s) => ({ ...s, channel: v }))}
+                />
+                <RadioList
+                  items={[
+                    { id: "In 1 hour", title: "In 1 hour" },
+                    { id: "Tonight 7pm", title: "Tonight 7pm" },
+                    { id: "Tomorrow morning", title: "Tomorrow morning" },
+                  ]}
+                  value={scheduling.when}
+                  onChange={(v) => setScheduling((s) => ({ ...s, when: v }))}
+                />
               </div>
             )}
-
             {steps[modalStep].key === "measure" && (
-              <div className="mt-3 text-sm space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 border border-neutral-200 rounded-xl">
-                    <div className="text-xs text-neutral-500">Segment</div>
-                    <div className="font-medium">{seg.title}</div>
-                  </div>
-                  <div className="p-3 border border-neutral-200 rounded-xl">
-                    <div className="text-xs text-neutral-500">Offer</div>
-                    <div className="font-medium">{off.title}</div>
-                  </div>
-                  <div className="p-3 border border-neutral-200 rounded-xl text-center">
-                    <div className="text-xs text-neutral-500">Est. Reactivations</div>
-                    <div className="font-semibold mt-1">{reactivated}</div>
-                  </div>
-                  <div className="p-3 border border-neutral-200 rounded-xl text-center">
-                    <div className="text-xs text-neutral-500">Projected Sales</div>
-                    <div className="font-semibold mt-1">${revenue}</div>
-                  </div>
-                </div>
-                <div className="text-xs text-neutral-600">Approve to schedule and track results on the Impact page.</div>
+              <div className="grid grid-cols-2 gap-3">
+                <MinimalStat k="Segment" v={seg.title} />
+                <MinimalStat k="Offer" v={off.title} />
+                <MinimalStat k="Reactivations (est.)" v={reactivated} />
+                <MinimalStat k="Projected Sales" v={`$${revenue}`} />
               </div>
             )}
-
             <div className="mt-5 flex items-center justify-between">
-              <button onClick={prevStep} className="px-3 py-2 rounded-md border border-neutral-200 text-sm hover:bg-neutral-50">Back</button>
+              <button onClick={prevStep} className="px-3 py-2 rounded-md border border-neutral-200 text-sm hover:bg-neutral-50">
+                Back
+              </button>
               {modalStep < steps.length - 1 ? (
-                <button onClick={nextStep} className="px-3 py-2 rounded-md bg-neutral-900 text-white text-sm">Next</button>
+                <button onClick={nextStep} className="px-3 py-2 rounded-md bg-neutral-900 text-white text-sm">
+                  Next
+                </button>
               ) : (
-                <button onClick={approveAndSend} className="px-3 py-2 rounded-md bg-neutral-900 text-white text-sm">Approve & Schedule</button>
+                <button onClick={approveAndSend} className="px-3 py-2 rounded-md bg-neutral-900 text-white text-sm">
+                  Approve & Schedule
+                </button>
               )}
             </div>
           </>
         ) : (
           <div className="space-y-3 text-sm">
             <div className="font-semibold text-base">Campaign scheduled</div>
-            <div className="text-neutral-600">{done.offer} to {done.segment} via {done.channel} — {done.when}.</div>
+            <div className="text-neutral-600">
+              {done.offer} to {done.segment} via {done.channel} — {done.when}.
+            </div>
             <div className="grid grid-cols-2 gap-3">
-              <StatCard label="Audience" value={done.audience} />
-              <StatCard label="Est. Reactivations" value={done.reactivated} />
+              <MinimalStat k="Audience" v={done.audience} />
+              <MinimalStat k="Reactivations (est.)" v={done.reactivated} />
             </div>
             <button onClick={() => { setModalOpen(false); setDone(null); }} className="px-3 py-2 rounded-md bg-neutral-900 text-white text-sm">Close</button>
           </div>

@@ -15,7 +15,7 @@ type GtagFn = (...args: GtagArgs) => void;
 
 declare global {
   interface Window {
-    dataLayer?: unknown[];
+    dataLayer?: { push?: (v: unknown) => void };
     gtag?: GtagFn;
   }
 }
@@ -28,7 +28,8 @@ function gtagSafe(...args: GtagArgs): void {
   }
   // Queue until gtag.js is ready
   if (typeof window !== "undefined") {
-    (window.dataLayer = window.dataLayer || []).push(args as unknown);
+    // Push into GTM dataLayer if present; otherwise no-op
+    window.dataLayer?.push?.(args as unknown);
   }
 }
 

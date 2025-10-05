@@ -1,4 +1,4 @@
-import {
+import React, {
   useState,
   useEffect,
   useMemo,
@@ -6,12 +6,11 @@ import {
   useRef,
   type Dispatch,
   type SetStateAction,
-//   type ChangeEvent,
-  type ReactNode,
+//   type ReactNode,
 } from "react";
 
 /* ------------------------------------------------
-   Minimal inline icons (Tailwind-only, no deps)
+   Minimal inline icons (no deps)
 -------------------------------------------------*/
 
 const IconX = ({ size = 16 }: { size?: number }) => (
@@ -68,15 +67,21 @@ const IconEyeOff = ({ size = 14 }: { size?: number }) => (
     <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.77 21.77 0 0 1 5.06-5.94M1 1l22 22" fill="none" strokeWidth="2" />
   </svg>
 );
-const IconBot = ({ size = 18 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" className="stroke-current">
-    <rect x="3" y="7" width="18" height="12" rx="3" fill="none" strokeWidth="2" />
-    <path d="M12 7V3M8 11h.01M16 11h.01" fill="none" strokeWidth="2" strokeLinecap="round" />
-  </svg>
-);
+// const IconBot = ({ size = 18 }: { size?: number }) => (
+//   <svg width={size} height={size} viewBox="0 0 24 24" className="stroke-current">
+//     <rect x="3" y="7" width="18" height="12" rx="3" fill="none" strokeWidth="2" />
+//     <path d="M12 7V3M8 11h.01M16 11h.01" fill="none" strokeWidth="2" strokeLinecap="round" />
+//   </svg>
+// );
 const IconActivity = ({ size = 12 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" className="stroke-current">
     <path d="M22 12h-4l-3 7-6-14-3 7H2" fill="none" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+/** Heart (joy) */
+const IconHeart = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" className="stroke-current fill-current">
+    <path d="M12 21s-6.7-4.35-9.33-7C.8 11.1 1 7.8 3.3 6A5 5 0 0 1 12 7a5 5 0 0 1 8.7-1c2.3 1.8 2.5 5.1.63 8C18.7 16.65 12 21 12 21z" />
   </svg>
 );
 
@@ -106,6 +111,7 @@ interface ConnectionMap {
 interface Kpi { mrr: number; activePilots: number; projectedLift: number; last24: number[] }
 interface SimRecord { id: string; time: number; audience: number; reactivated: number; type: string }
 interface DoneResult { audience: number; reactivated: number; revenue: number; segment: string; offer: string; when: string; channel: string }
+interface OpsRun { id: string; time: number; segment: string; offer: string; reactivated: number; revenue: number }
 
 declare global {
   interface Window {
@@ -115,6 +121,7 @@ declare global {
 }
 
 const STORAGE_KEY = "emergefy_demo_state_v1";
+const OPS_HISTORY_KEY = "emergefy_ops_history_v1";
 const AVG_BASKET = 18;
 const DEFAULT_KPI: Kpi = { mrr: 4200, activePilots: 3, projectedLift: 12, last24: [5, 12, 8, 10, 6, 9, 7] };
 
@@ -124,34 +131,18 @@ const DEFAULT_KPI: Kpi = { mrr: 4200, activePilots: 3, projectedLift: 12, last24
 
 function track(event: string, payload: Payload = {}): void {
   try {
-    const common = {
-      event,
-      ts: Date.now(),
-      path: typeof window !== "undefined" ? window.location?.pathname ?? "/" : "/",
-      ...payload,
-    };
-    if (typeof window !== "undefined" && window.dataLayer?.push) {
-      window.dataLayer.push(common);
-      return;
-    }
+    const common = { event, ts: Date.now(), path: typeof window !== "undefined" ? window.location?.pathname ?? "/" : "/", ...payload };
+    if (typeof window !== "undefined" && window.dataLayer?.push) { window.dataLayer.push(common); return; }
     console.log("[demo-analytics]", common);
-  } catch (err) {
-    console.error("track error", err);
-  }
+  } catch (err) { console.error("track error", err); }
 }
 
-function wait(ms: number): Promise<void> {
-  return new Promise((res) => setTimeout(res, ms));
-}
+function wait(ms: number): Promise<void> { return new Promise((res) => setTimeout(res, ms)); }
 
 function recommendBestPair(segments: Segment[], offers: Offer[]) {
-  const pairs = segments.flatMap((s) =>
-    offers.map((o) => ({
-      seg: s,
-      off: o,
-      score: Math.round(Math.max(s.estReact, o.estLift) * 100 + s.size / 10 - Math.abs(o.marginImpact)),
-    }))
-  );
+  const pairs = segments.flatMap((s) => offers.map((o) => ({
+    seg: s, off: o, score: Math.round(Math.max(s.estReact, o.estLift) * 100 + s.size / 10 - Math.abs(o.marginImpact)),
+  })));
   return pairs.sort((a, b) => b.score - a.score)[0];
 }
 
@@ -165,8 +156,7 @@ function computePreviewMetrics(segments: Segment[], offers: Offer[], selectedSeg
 
 async function runTestsOnce() {
   try {
-    if (typeof window === "undefined") return;
-    if (window.__EMERGEFY_TESTS_RAN__) return;
+    if (typeof window === "undefined" || window.__EMERGEFY_TESTS_RAN__) return;
     window.__EMERGEFY_TESTS_RAN__ = true;
 
     const tSegments: Segment[] = [
@@ -177,21 +167,14 @@ async function runTestsOnce() {
       { id: "o1", title: "O1", marginImpact: -2, estLift: 0.04 },
       { id: "o2", title: "O2", marginImpact: -6, estLift: 0.1 },
     ];
-
     const best = recommendBestPair(tSegments, tOffers);
     console.assert(best.off.id === "o2", "recommendBest should prefer higher lift despite margin hit");
-
     const m = computePreviewMetrics(tSegments, tOffers, "s1", "o2");
     console.assert(m.reactivated === Math.round(100 * Math.max(0.05, 0.1)), "reactivated mismatch");
     console.assert(m.revenue === Math.round(m.reactivated * AVG_BASKET), "revenue mismatch");
-
-    const p = wait(5);
-    console.assert(typeof (p as Promise<void>).then === "function", "wait should return a promise");
-    await p;
-    console.log("[demo-tests] All runtime tests passed");
-  } catch (err) {
-    console.error("[demo-tests] Failure", err);
-  }
+    const p = wait(5); console.assert(typeof (p as Promise<void>).then === "function");
+    await p; console.log("[demo-tests] All runtime tests passed");
+  } catch (err) { console.error("[demo-tests] Failure", err); }
 }
 
 /* ------------------------------------------------
@@ -248,9 +231,7 @@ function ChoicePills<T extends string>({
           >
             <div className="flex items-center gap-2">
               <span className="font-medium">{o.label}</span>
-              {o.sub && (
-                <span className={`text-[11px] ${active ? "text-white/80" : "text-neutral-500"}`}>{o.sub}</span>
-              )}
+              {o.sub && <span className={`text-[11px] ${active ? "text-white/80" : "text-neutral-500"}`}>{o.sub}</span>}
             </div>
           </button>
         );
@@ -259,7 +240,7 @@ function ChoicePills<T extends string>({
   );
 }
 
-/** Clean modal (no overlap, Tailwind-only) */
+/** Clean modal (header avoids Step/X overlap) */
 function WizardModal({
   open,
   onClose,
@@ -269,41 +250,19 @@ function WizardModal({
   open: boolean;
   onClose: () => void;
   stepText?: string;
-  children: ReactNode;
+  children: React.ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  useEffect(() => {
-    if (open && panelRef.current) panelRef.current.focus();
-  }, [open]);
-
+  useEffect(() => { if (!open) return; const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose(); document.addEventListener("keydown", onKey); return () => document.removeEventListener("keydown", onKey); }, [open, onClose]);
+  useEffect(() => { if (open && panelRef.current) panelRef.current.focus(); }, [open]);
   if (!open) return null;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        className="relative w-[92%] md:w-[720px] bg-white border border-neutral-200 rounded-2xl shadow-xl outline-none transform transition-all"
-        tabIndex={-1}
-      >
-        {/* Header fixes the step/X overlap */}
+      <div ref={panelRef} role="dialog" aria-modal="true" tabIndex={-1} className="relative w-[92%] md:w-[720px] bg-white border border-neutral-200 rounded-2xl shadow-xl outline-none">
         <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 rounded-t-2xl bg-white/80 backdrop-blur">
           <div className="text-[11px] uppercase tracking-wide text-neutral-500">{stepText}</div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 hover:bg-neutral-50"
-          >
+          <button onClick={onClose} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 hover:bg-neutral-50">
             <IconX />
           </button>
         </div>
@@ -319,23 +278,12 @@ function WizardModal({
 
 export default function InteractiveDemoPage() {
   const [screen, setScreen] = useState<"agent" | "flow" | "dashboard">("agent");
-
-  useEffect(() => {
-    track("page_view", { page: "vertical_ai_agent_ops_copilot" });
-    runTestsOnce();
-  }, []);
-
+  useEffect(() => { track("page_view", { page: "vertical_ai_agent_ops_copilot" }); runTestsOnce(); }, []);
   return (
     <div className="min-h-screen bg-white text-neutral-900 antialiased py-8">
       <div className="mx-auto max-w-7xl px-4 grid grid-cols-12 gap-6">
         <aside className="col-span-3 hidden md:block">
-          <Sidebar
-            active={screen}
-            onChange={(s) => {
-              setScreen(s);
-              track("nav_click", { to: s });
-            }}
-          />
+          <Sidebar active={screen} onChange={(s) => { setScreen(s); track("nav_click", { to: s }); }} />
         </aside>
         <div className="col-span-12 md:col-span-9">
           <Header />
@@ -346,13 +294,7 @@ export default function InteractiveDemoPage() {
           </main>
         </div>
       </div>
-      <MobileNav
-        onChange={(s) => {
-          setScreen(s);
-          track("nav_click", { to: s });
-        }}
-        active={screen}
-      />
+      <MobileNav onChange={(s) => { setScreen(s); track("nav_click", { to: s }); }} active={screen} />
     </div>
   );
 }
@@ -365,9 +307,7 @@ function Header() {
   return (
     <header className="flex items-center justify-between">
       <div className="flex items-center gap-3">
-        <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-neutral-900 to-neutral-700 flex items-center justify-center text-white font-bold">
-          E
-        </div>
+        <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-neutral-900 to-neutral-700 flex items-center justify-center text-white font-bold">E</div>
         <div>
           <div className="font-semibold text-lg">Emergefy</div>
           <div className="text-xs text-neutral-500">Vertical AI-Agent — Ops Copilot</div>
@@ -375,15 +315,8 @@ function Header() {
       </div>
       <div className="flex items-center gap-3">
         <div className="hidden sm:flex items-center gap-2">
-          <button className="px-3 py-1 rounded-md border border-neutral-200 text-sm hover:bg-neutral-50" onClick={() => track("help_open")}>
-            Help
-          </button>
-          <button
-            className="px-3 py-1 rounded-md bg-neutral-900 text-white text-sm flex items-center gap-2"
-            onClick={() => track("cta_click", { where: "header_start_free" })}
-          >
-            <IconUsers /> Start free
-          </button>
+          <button className="px-3 py-1 rounded-md border border-neutral-200 text-sm hover:bg-neutral-50" onClick={() => track("help_open")}>Help</button>
+          <button className="px-3 py-1 rounded-md bg-neutral-900 text-white text-sm flex items-center gap-2" onClick={() => track("cta_click", { where: "header_start_free" })}><IconUsers /> Start free</button>
         </div>
         <DemoBell />
       </div>
@@ -391,13 +324,7 @@ function Header() {
   );
 }
 
-function Sidebar({
-  active,
-  onChange,
-}: {
-  active: "agent" | "flow" | "dashboard";
-  onChange: (s: "agent" | "flow" | "dashboard") => void;
-}) {
+function Sidebar({ active, onChange }: { active: "agent" | "flow" | "dashboard"; onChange: (s: "agent" | "flow" | "dashboard") => void }) {
   const items: { key: "dashboard" | "flow" | "agent"; label: string }[] = [
     { key: "dashboard", label: "Impact" },
     { key: "flow", label: "Playbooks" },
@@ -408,17 +335,7 @@ function Sidebar({
       <div className="text-sm text-neutral-500 mb-3">Product demo</div>
       <nav className="space-y-2">
         {items.map((i) => (
-          <button
-            key={i.key}
-            onClick={() => onChange(i.key)}
-            className={`w-full text-left p-2 rounded-xl border transition ${
-              active === i.key
-                ? "bg-neutral-50 border-neutral-300"
-                : "border-transparent hover:bg-neutral-50"
-            }`}
-          >
-            {i.label}
-          </button>
+          <button key={i.key} onClick={() => onChange(i.key)} className={`w-full text-left p-2 rounded-xl border transition ${active === i.key ? "bg-neutral-50 border-neutral-300" : "border-transparent hover:bg-neutral-50"}`}>{i.label}</button>
         ))}
       </nav>
       <div className="mt-4 text-xs text-neutral-500">Tip: The agent works end-to-end with guardrails.</div>
@@ -426,13 +343,7 @@ function Sidebar({
   );
 }
 
-function MobileNav({
-  active,
-  onChange,
-}: {
-  active: "agent" | "flow" | "dashboard";
-  onChange: (s: "agent" | "flow" | "dashboard") => void;
-}) {
+function MobileNav({ active, onChange }: { active: "agent" | "flow" | "dashboard"; onChange: (s: "agent" | "flow" | "dashboard") => void }) {
   return (
     <div className="fixed bottom-4 left-0 right-0 z-40 flex justify-center md:hidden">
       <div className="w-[92%] rounded-2xl bg-white border border-neutral-200 p-2 flex justify-between shadow-sm">
@@ -446,29 +357,17 @@ function MobileNav({
 
 function DemoBell() {
   const [open, setOpen] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setOpen(true), 1200);
-    return () => clearTimeout(t);
-  }, []);
+  useEffect(() => { const t = setTimeout(() => setOpen(true), 1200); return () => clearTimeout(t); }, []);
   return (
     <div className="relative">
-      <button
-        onClick={() => {
-          setOpen((s) => !s);
-          track("open_notifications");
-        }}
-        aria-label="notifications"
-        className="p-2 rounded-md border border-neutral-200 hover:bg-neutral-50"
-      >
+      <button onClick={() => { setOpen((s) => !s); track("open_notifications"); }} aria-label="notifications" className="p-2 rounded-md border border-neutral-200 hover:bg-neutral-50">
         <IconBell />
       </button>
       {open && (
         <div className="absolute right-0 mt-2 w-80 bg-white border border-neutral-200 rounded-2xl shadow p-3 z-50">
           <div className="flex items-center justify-between text-sm">
             <div className="font-semibold">Demo notifications</div>
-            <button onClick={() => setOpen(false)} className="p-1 rounded-md hover:bg-neutral-50">
-              <IconX />
-            </button>
+            <button onClick={() => setOpen(false)} className="p-1 rounded-md hover:bg-neutral-50"><IconX /></button>
           </div>
           <div className="mt-2 text-xs text-neutral-600">Recent demo events appear here when you run the flow.</div>
           <ul className="mt-3 space-y-2 text-sm">
@@ -495,24 +394,22 @@ function DemoBell() {
 
 /* ------------------------------------------------
    Agent (Ops Copilot)
+   - Heart of joy pulse
+   - Slower transcript
+   - Run history
 -------------------------------------------------*/
 
-function PersonaCard({
-  reasoningVisible,
-  setReasoningVisible,
-  paused,
-  setPaused,
-}: {
-  reasoningVisible: boolean;
-  setReasoningVisible: Dispatch<SetStateAction<boolean>>;
-  paused: boolean;
-  setPaused: Dispatch<SetStateAction<boolean>>;
-}) {
+function PersonaCard({ reasoningVisible, setReasoningVisible, paused, setPaused }: { reasoningVisible: boolean; setReasoningVisible: Dispatch<SetStateAction<boolean>>; paused: boolean; setPaused: Dispatch<SetStateAction<boolean>> }) {
   return (
     <div className="p-4 rounded-2xl border border-neutral-200 bg-white flex items-center justify-between">
       <div className="flex items-center gap-3">
-        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-neutral-900 to-neutral-700 flex items-center justify-center text-white">
-          <IconBot />
+        <div className="relative h-10 w-10">
+          {/* pulsing heart glow */}
+          <span className="absolute inset-0 rounded-full bg-red-500/20 animate-ping" />
+          <span className="absolute inset-0 rounded-full bg-red-500/10" />
+          <div className="relative h-10 w-10 rounded-full bg-gradient-to-br from-neutral-900 to-neutral-700 text-white flex items-center justify-center">
+            <IconHeart />
+          </div>
         </div>
         <div>
           <div className="font-semibold">Restaurant Growth Expert</div>
@@ -520,19 +417,11 @@ function PersonaCard({
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <button
-          onClick={() => setReasoningVisible((s) => !s)}
-          className="px-3 py-1 rounded-md border border-neutral-200 text-xs flex items-center gap-1 hover:bg-neutral-50"
-        >
-          {reasoningVisible ? <IconEyeOff /> : <IconEye />}
-          {reasoningVisible ? "Hide CoT" : "Show CoT"}
+        <button onClick={() => setReasoningVisible((s) => !s)} className="px-3 py-1 rounded-md border border-neutral-200 text-xs flex items-center gap-1 hover:bg-neutral-50">
+          {reasoningVisible ? <IconEyeOff /> : <IconEye />}{reasoningVisible ? "Hide CoT" : "Show CoT"}
         </button>
-        <button
-          onClick={() => setPaused((p) => !p)}
-          className="px-3 py-1 rounded-md text-xs flex items-center gap-1 bg-neutral-900 text-white"
-        >
-          {paused ? <IconPlay /> : <IconPause />}
-          {paused ? "Play" : "Pause"}
+        <button onClick={() => setPaused((p) => !p)} className="px-3 py-1 rounded-md text-xs flex items-center gap-1 bg-neutral-900 text-white">
+          {paused ? <IconPlay /> : <IconPause />}{paused ? "Play" : "Pause"}
         </button>
       </div>
     </div>
@@ -540,22 +429,16 @@ function PersonaCard({
 }
 
 function OpsCopilot() {
-  const segments = useMemo<Segment[]>(
-    () => [
-      { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 120, estReact: 0.09 },
-      { id: "vip", title: "VIP frequent", size: 42, estReact: 0.12 },
-      { id: "low-value", title: "Low spenders", size: 220, estReact: 0.03 },
-    ],
-    []
-  );
-  const offers = useMemo<Offer[]>(
-    () => [
-      { id: "10-off", title: "10% off next order", marginImpact: -6, estLift: 0.08 },
-      { id: "bundle", title: "Meal bundle (save $3)", marginImpact: -3, estLift: 0.1 },
-      { id: "free-drink", title: "Free drink w/order $10+", marginImpact: -4, estLift: 0.06 },
-    ],
-    []
-  );
+  const segments = useMemo<Segment[]>(() => [
+    { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 120, estReact: 0.09 },
+    { id: "vip", title: "VIP frequent", size: 42, estReact: 0.12 },
+    { id: "low-value", title: "Low spenders", size: 220, estReact: 0.03 },
+  ], []);
+  const offers = useMemo<Offer[]>(() => [
+    { id: "10-off", title: "10% off next order", marginImpact: -6, estLift: 0.08 },
+    { id: "bundle", title: "Meal bundle (save $3)", marginImpact: -3, estLift: 0.1 },
+    { id: "free-drink", title: "Free drink w/order $10+", marginImpact: -4, estLift: 0.06 },
+  ], []);
 
   const initialPick = useMemo(() => recommendBestPair(segments, offers), [segments, offers]);
 
@@ -570,7 +453,22 @@ function OpsCopilot() {
   const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
   const [spot, setSpot] = useState<null | "audience" | "offer">(null);
 
+  // Run history (persisted)
+  const [opsHistory, setOpsHistory] = useState<OpsRun[]>(() => {
+    try { const raw = localStorage.getItem(OPS_HISTORY_KEY); if (raw) return JSON.parse(raw) as OpsRun[]; } catch (err) { console.error(err); }
+    return [];
+  });
+  useEffect(() => { try { localStorage.setItem(OPS_HISTORY_KEY, JSON.stringify(opsHistory.slice(0, 12))); } catch (err) { console.error(err); } }, [opsHistory]);
+
   const { seg, off, reactivated, revenue } = computePreviewMetrics(segments, offers, segmentId, offerId);
+
+  // slower timings per request
+  const INTERNAL_API_WAIT = 800;   // was 500
+  const STEP_WAIT = 1200;          // was 600
+
+  const recordRun = useCallback((run: OpsRun) => {
+    setOpsHistory((h) => [run, ...h].slice(0, 12));
+  }, []);
 
   const stepSession = useCallback(async () => {
     setProgress((p) => Math.min(100, p + 20));
@@ -594,7 +492,7 @@ function OpsCopilot() {
         setToolCalls((c) => [...c, { id, name: "CampaignBuilderAPI.create", input: { segment: seg.id, offer: off.id }, status: "running" }]);
         setSpot("offer");
         (async () => {
-          await wait(500);
+          await wait(INTERNAL_API_WAIT);
           setToolCalls((c) => c.map((x) => (x.id === id ? { ...x, status: "ok", output: { preview: { reactivated, revenue } } } : x)));
         })();
         return [...curr, { id, type: "act", text: `Create campaign: ${off.title} for ${seg.title}.` }];
@@ -607,23 +505,26 @@ function OpsCopilot() {
         ];
         setVerifications(checks);
         setProgress(100);
-        return [...curr, { id, type: "verify", text: `Checks: 3/3 passed.` }];
+
+        // Add to Ops history on verify (end of run)
+        const run: OpsRun = { id: String(Date.now()), time: Date.now(), segment: seg.title, offer: off.title, reactivated, revenue };
+        recordRun(run);
+
+        return [...curr, { id, type: "verify", text: `Checks: ${checks.filter((c) => c.ok).length}/${checks.length} passed.` }];
       }
       return curr;
     });
-  }, [off.id, off.marginImpact, off.title, reactivated, revenue, seg.id, seg.size, seg.title]);
+  }, [INTERNAL_API_WAIT, off.id, off.marginImpact, off.title, reactivated, recordRun, revenue, seg.id, seg.size, seg.title]);
 
   const playSession = useCallback(async () => {
     for (let i = 0; i < 4; i++) {
       if (paused) break;
       await stepSession();
-      await wait(600);
+      await wait(STEP_WAIT);
     }
-  }, [paused, stepSession]);
+  }, [paused, stepSession, STEP_WAIT]);
 
-  useEffect(() => {
-    if (!paused && transcript.length < 4) void playSession();
-  }, [paused, transcript.length, playSession]);
+  useEffect(() => { if (!paused && transcript.length < 4) void playSession(); }, [paused, transcript.length, playSession]);
 
   function resetSession() {
     setTranscript([]); setBranching([]); setVerifications([]); setToolCalls([]); setProgress(0); setSpot(null);
@@ -642,27 +543,29 @@ function OpsCopilot() {
       obj.kpi = kpi;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
       track("agent_expert_approve", { segment: seg.id, offer: off.id, reactivated });
-    } catch (err) {
-        console.error(err);
-    }
+    } catch (err) { console.error(err); }
   }
 
   return (
     <section className="rounded-2xl border border-neutral-200 p-6 bg-white">
+      {/* header with heart of joy pulses */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
+          <div className="relative">
+            <span className="absolute -inset-2 rounded-full bg-red-500/20 animate-ping" />
+            <span className="absolute -inset-2 rounded-full bg-red-500/10" />
+            <span className="relative inline-flex h-6 w-6 items-center justify-center rounded-full bg-white border border-neutral-200 shadow-sm">
+              <IconHeart size={14} />
+            </span>
+          </div>
           <h3 className="text-lg font-semibold">Ops Copilot</h3>
-          <span className="text-xs text-neutral-500 flex items-center gap-1">
-            <IconActivity /> Vertical AI-Agent
-          </span>
+          <span className="text-xs text-neutral-500 flex items-center gap-1"><IconActivity /> Vertical AI-Agent</span>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setPaused((p) => !p)} className="px-3 py-2 rounded-md border border-neutral-200 text-sm flex items-center gap-2 hover:bg-neutral-50">
             {paused ? <IconPlay /> : <IconPause />}{paused ? "Play" : "Pause"}
           </button>
-          <button onClick={() => void stepSession()} className="px-3 py-2 rounded-md border border-neutral-200 text-sm flex items-center gap-2 hover:bg-neutral-50">
-            <IconSkip /> Step
-          </button>
+          <button onClick={() => void stepSession()} className="px-3 py-2 rounded-md border border-neutral-200 text-sm flex items-center gap-2 hover:bg-neutral-50"><IconSkip /> Step</button>
           <button onClick={resetSession} className="px-3 py-2 rounded-md border border-neutral-200 text-sm hover:bg-neutral-50">Reset</button>
         </div>
       </div>
@@ -678,14 +581,7 @@ function OpsCopilot() {
             <div className="space-y-2 text-sm">
               {transcript.length === 0 && <div className="text-neutral-500">Press Step or Play to watch the agent work.</div>}
               {transcript.map((t) => (
-                <div
-                  key={t.id}
-                  className={`p-2 rounded-xl border text-neutral-800 ${
-                    t.type === "observe" ? "bg-neutral-50 border-neutral-200" :
-                    t.type === "think" ? "bg-neutral-100 border-neutral-200" :
-                    t.type === "act" ? "bg-neutral-50 border-neutral-200" : "bg-neutral-50 border-neutral-200"
-                  }`}
-                >
+                <div key={t.id} className={`p-2 rounded-xl border text-neutral-800 ${t.type === "observe" ? "bg-neutral-50 border-neutral-200" : t.type === "think" ? "bg-neutral-100 border-neutral-200" : t.type === "act" ? "bg-neutral-50 border-neutral-200" : "bg-neutral-50 border-neutral-200"}`}>
                   <div className="text-[11px] uppercase tracking-wide text-neutral-500">{t.type}</div>
                   <div>{t.text}</div>
                 </div>
@@ -734,6 +630,26 @@ function OpsCopilot() {
               </div>
             )}
           </div>
+
+          {/* History of previous Ops Copilot runs */}
+          <div className="p-4 rounded-2xl border border-neutral-200 bg-white">
+            <div className="text-xs text-neutral-500 mb-2">Run history</div>
+            {opsHistory.length === 0 ? (
+              <div className="text-sm text-neutral-500">No runs yet — press Play or Step to generate a plan.</div>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {opsHistory.map((r) => (
+                  <li key={r.id} className="flex items-center justify-between border border-neutral-200 rounded-xl p-2">
+                    <div>
+                      <div className="font-medium">{r.offer} • {r.segment}</div>
+                      <div className="text-xs text-neutral-500">{new Date(r.time).toLocaleString()} • react {r.reactivated} • sales ${r.revenue}</div>
+                    </div>
+                    <div className="text-xs text-neutral-600">#{r.id.slice(-4)}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
 
         <div className="relative">
@@ -749,36 +665,17 @@ function OpsCopilot() {
             <div className="mt-4 grid grid-cols-1 gap-4">
               <div>
                 <div className="text-xs text-neutral-500 mb-1">Audience</div>
-                <ChoicePills
-                  options={segments.map((s) => ({ id: s.id as string, label: s.title, sub: `${s.size}` }))}
-                  value={segmentId as string}
-                  onChange={(v) => setSegmentId(v)}
-                />
+                <ChoicePills options={segments.map((s) => ({ id: s.id as string, label: s.title, sub: `${s.size}` }))} value={segmentId as string} onChange={(v) => setSegmentId(v)} />
               </div>
               <div>
                 <div className="text-xs text-neutral-500 mb-1">Offer</div>
-                <ChoicePills
-                  options={offers.map((o) => ({ id: o.id as string, label: o.title }))}
-                  value={offerId as string}
-                  onChange={(v) => setOfferId(v)}
-                />
+                <ChoicePills options={offers.map((o) => ({ id: o.id as string, label: o.title }))} value={offerId as string} onChange={(v) => setOfferId(v)} />
               </div>
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button onClick={approvePlan} className="px-3 py-2 rounded-md bg-neutral-900 text-white flex items-center gap-2">
-                <IconZap /> Approve
-              </button>
-              <button
-                onClick={() => {
-                  const pick = recommendBestPair(segments, offers);
-                  setSegmentId(pick.seg.id);
-                  setOfferId(pick.off.id);
-                }}
-                className="px-3 py-2 rounded-md border border-neutral-200 hover:bg-neutral-50"
-              >
-                Use agent pick
-              </button>
+              <button onClick={approvePlan} className="px-3 py-2 rounded-md bg-neutral-900 text-white flex items-center gap-2"><IconZap /> Approve</button>
+              <button onClick={() => { const pick = recommendBestPair(segments, offers); setSegmentId(pick.seg.id); setOfferId(pick.off.id); }} className="px-3 py-2 rounded-md border border-neutral-200 hover:bg-neutral-50">Use agent pick</button>
             </div>
           </div>
 
@@ -800,7 +697,6 @@ function OpsCopilot() {
 
 function ImpactSummary() {
   const [summary, setSummary] = useState({ revenue: 4220, retained: 11, optimized: 8 });
-
   useEffect(() => {
     let mounted = true;
     const update = () => {
@@ -813,18 +709,11 @@ function ImpactSummary() {
         const retained = sim.reduce((a, r) => a + (r.reactivated || 0), 0);
         const optimized = Math.max(0, Math.min(50, Math.round(sim.filter((r) => r?.type).length)));
         if (mounted) setSummary({ revenue: extraRevenue || 0, retained: retained || 0, optimized });
-      } catch (err) {
-            console.error(err);
-      }
+      } catch (err) { console.error(err); }
     };
-    update();
-    const id = setInterval(update, 1200);
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
+    update(); const id = setInterval(update, 1200);
+    return () => { mounted = false; clearInterval(id); };
   }, []);
-
   return (
     <div className="mt-3 p-3 rounded-2xl bg-gradient-to-r from-neutral-50 to-neutral-100 border border-neutral-200 text-sm">
       <span className="font-medium">Emergefy</span> brought in <span className="font-semibold">${summary.revenue}</span> extra revenue this month, retained <span className="font-semibold">{summary.retained}</span> at-risk customers, and optimized <span className="font-semibold">{summary.optimized}</span> inventory orders — all automatically.
@@ -835,45 +724,28 @@ function ImpactSummary() {
 function Sparkline({ values }: { values: number[] }) {
   const safeValues = Array.isArray(values) && values.length ? values : [0];
   const w = 320, h = 60, max = Math.max(...safeValues, 1), denom = Math.max(1, safeValues.length - 1);
-  const points =
-    safeValues.length === 1
-      ? `0,${h - (safeValues[0] / max) * h} ${w},${h - (safeValues[0] / max) * h}`
-      : safeValues.map((v, i) => `${(i / denom) * w},${h - (v / max) * h}`).join(" ");
+  const points = safeValues.length === 1 ? `0,${h - (safeValues[0] / max) * h} ${w},${h - (safeValues[0] / max) * h}` : safeValues.map((v, i) => `${(i / denom) * w},${h - (v / max) * h}`).join(" ");
   return (
     <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="mt-2 h-14">
       <polyline fill="none" stroke="#0a0a0a" strokeWidth={2} points={points} strokeLinejoin="round" strokeLinecap="round" />
-      {safeValues.length > 1 &&
-        safeValues.map((v, i) => <circle key={i} cx={(i / denom) * w} cy={h - (v / max) * h} r={2.5} />)}
+      {safeValues.length > 1 && safeValues.map((v, i) => <circle key={i} cx={(i / denom) * w} cy={h - (v / max) * h} r={2.5} />)}
     </svg>
   );
 }
 
 function RecentEvents() {
   const [events, setEvents] = useState<SimRecord[]>(() => {
-    try {
-      if (typeof window === "undefined") return [];
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return (JSON.parse(raw).simHistory || []).slice(0, 6) as SimRecord[];
-    } catch (err) {
-        console.error(err);
-    }
+    try { if (typeof window === "undefined") return []; const raw = localStorage.getItem(STORAGE_KEY); if (raw) return (JSON.parse(raw).simHistory || []).slice(0, 6) as SimRecord[];     } catch (err) { console.error(err); }
+
     return [];
   });
   useEffect(() => {
     let mounted = true;
     const id = setInterval(() => {
-      try {
-        if (!mounted || typeof window === "undefined") return;
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) setEvents(((JSON.parse(raw).simHistory || []) as SimRecord[]).slice(0, 6));
-      } catch (err) {
-            console.error(err);
-      }
+      try { if (!mounted || typeof window === "undefined") return; const raw = localStorage.getItem(STORAGE_KEY); if (raw) setEvents(((JSON.parse(raw).simHistory || []) as SimRecord[]).slice(0, 6));     } catch (err) { console.error(err); }
+
     }, 1200);
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
+    return () => { mounted = false; clearInterval(id); };
   }, []);
   if (events.length === 0) return <div className="text-sm text-neutral-500 mt-2">No demo events yet — run a playbook.</div>;
   return (
@@ -894,14 +766,8 @@ function RecentEvents() {
 function LiveDashboard() {
   const defaultKpi = DEFAULT_KPI;
   const [kpi, setKpi] = useState<Kpi>(() => {
-    try {
-      if (typeof window === "undefined") return defaultKpi;
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const obj = JSON.parse(raw);
-        return (obj.kpi as Kpi) || defaultKpi;
-      }
-    } catch { /* noop */ }
+    try { if (typeof window === "undefined") return defaultKpi; const raw = localStorage.getItem(STORAGE_KEY); if (raw) { const obj = JSON.parse(raw); return (obj.kpi as Kpi) || defaultKpi; }     } catch (err) { console.error(err); }
+
     return defaultKpi;
   });
 
@@ -920,7 +786,7 @@ function LiveDashboard() {
           const projectedLift = 10 + Math.round((sim.reduce((a, b) => a + (b.reactivated || 0), 0) / 100) % 10);
           setKpi({ mrr, activePilots, projectedLift, last24: last24.length ? last24 : defaultKpi.last24 });
         }
-      } catch { /* noop */ }
+    } catch (err) { console.error(err); }
     }, 1200);
     return () => { mounted = false; clearInterval(id); };
   }, [defaultKpi]);
@@ -946,33 +812,19 @@ function LiveDashboard() {
         </div>
         <div className="w-1/3 p-4 rounded-2xl border border-neutral-200 bg-white">
           <div className="text-xs text-neutral-500">Guardrails</div>
-          <div className="mt-2 text-xs">
-            <div>Margin cap: ≤ 6% ✓</div>
-            <div>Brand terms: ✓</div>
-            <div>Spend cap: ✓</div>
-          </div>
+          <div className="mt-2 text-xs"><div>Margin cap: ≤ 6% ✓</div><div>Brand terms: ✓</div><div>Spend cap: ✓</div></div>
         </div>
       </div>
       <div className="mt-4 grid md:grid-cols-2 gap-4">
-        <div className="p-4 rounded-2xl border border-neutral-200 bg-white">
-          <div className="font-semibold">Recent demo events</div>
-          <RecentEvents />
-        </div>
-        <div className="p-4 rounded-2xl border border-neutral-200 bg-white">
-          <div className="font-semibold">Demo tips</div>
-          <ul className="mt-2 text-sm space-y-2 text-neutral-600">
-            <li>Toggle reasoning for different audiences.</li>
-            <li>Use Playbooks for fast, safe defaults.</li>
-            <li>Show verification checks before approve.</li>
-          </ul>
-        </div>
+        <div className="p-4 rounded-2xl border border-neutral-200 bg-white"><div className="font-semibold">Recent demo events</div><RecentEvents /></div>
+        <div className="p-4 rounded-2xl border border-neutral-200 bg-white"><div className="font-semibold">Demo tips</div><ul className="mt-2 text-sm space-y-2 text-neutral-600"><li>Toggle reasoning for different audiences.</li><li>Use Playbooks for fast, safe defaults.</li><li>Show verification checks before approve.</li></ul></div>
       </div>
     </section>
   );
 }
 
 /* ------------------------------------------------
-   Playbooks (Flow)
+   Playbooks (Flow) — unchanged from previous "slim" version
 -------------------------------------------------*/
 
 function FlowDemo() {
@@ -984,8 +836,6 @@ function FlowDemo() {
     { key: "measure", label: "Review", detail: "Preview results & approve", title: "Review and approve", body: "Double-check the plan and the projected impact. When you approve, we schedule it and track results." },
   ] as const;
 
-  const clampIndex = (i: number) => Math.min(steps.length - 1, Math.max(0, i));
-
   const [active, setActive] = useState<number>(1);
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [modalStep, setModalStep] = useState<number>(1);
@@ -994,34 +844,20 @@ function FlowDemo() {
   const [scheduling, setScheduling] = useState<{ when: string; channel: string }>({ when: "In 1 hour", channel: "SMS" });
   const [done, setDone] = useState<DoneResult | null>(null);
 
-  const segments = useMemo<Segment[]>(
-    () => [
-      { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 120, estReact: 0.09 },
-      { id: "vip", title: "VIP frequent", size: 42, estReact: 0.12 },
-      { id: "low-value", title: "Low spenders", size: 220, estReact: 0.03 },
-    ],
-    []
-  );
-  const offers = useMemo<Offer[]>(
-    () => [
-      { id: "10-off", title: "10% off next order", marginImpact: -6, estLift: 0.08 },
-      { id: "bundle", title: "Meal bundle (save $3)", marginImpact: -3, estLift: 0.1 },
-      { id: "free-drink", title: "Free drink w/order $10+", marginImpact: -4, estLift: 0.06 },
-    ],
-    []
-  );
+  const segments = useMemo<Segment[]>(() => [
+    { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 120, estReact: 0.09 },
+    { id: "vip", title: "VIP frequent", size: 42, estReact: 0.12 },
+    { id: "low-value", title: "Low spenders", size: 220, estReact: 0.03 },
+  ], []);
+  const offers = useMemo<Offer[]>(() => [
+    { id: "10-off", title: "10% off next order", marginImpact: -6, estLift: 0.08 },
+    { id: "bundle", title: "Meal bundle (save $3)", marginImpact: -3, estLift: 0.1 },
+    { id: "free-drink", title: "Free drink w/order $10+", marginImpact: -4, estLift: 0.06 },
+  ], []);
 
   const { reactivated, revenue, seg, off } = computePreviewMetrics(segments, offers, selectedSegment, selectedOffer);
 
-  // Slim list of connections per request: CSV, Google Sheets, Square, Toast, Shopify POS, Foodics
-  const [connections, setConnections] = useState<ConnectionMap>({
-    csv: true,
-    gsheet: false,
-    square: false,
-    toast: false,
-    shopifypos: false,
-    foodics: false,
-  });
+  const [connections, setConnections] = useState<ConnectionMap>({ csv: true, gsheet: false, square: false, toast: false, shopifypos: false, foodics: false });
 
   function approveAndSend() {
     const record: SimRecord = { id: String(Date.now()), time: Date.now(), audience: seg.size, reactivated, type: selectedOffer || "unknown" };
@@ -1032,38 +868,28 @@ function FlowDemo() {
       const simHistory: SimRecord[] = Array.isArray(obj.simHistory) ? obj.simHistory : [];
       simHistory.unshift(record);
       obj.simHistory = simHistory.slice(0, 20);
-
       const kpi = (obj.kpi as Kpi) || { mrr: 4200, activePilots: 3, projectedLift: 12, last24: [] };
       kpi.mrr = Math.max(4200, (kpi.mrr || 4200) + Math.round(reactivated * 2));
       kpi.activePilots = Math.min(10, kpi.activePilots || 3);
       obj.kpi = kpi;
-
       localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
       track("flow_approve_send", { segment: selectedSegment, offer: selectedOffer, reactivated, when: scheduling.when, channel: scheduling.channel });
-
       setDone({ audience: seg.size, reactivated, revenue, segment: seg.title, offer: off.title, when: scheduling.when, channel: scheduling.channel });
       setModalOpen(true);
-
       if (typeof document !== "undefined") {
         const el = document.createElement("div");
         el.textContent = `Scheduled — est reactivations: ${reactivated}`;
         el.className = "fixed right-4 bottom-6 bg-neutral-900 text-white px-4 py-2 rounded shadow";
         document.body.appendChild(el);
-        setTimeout(() => { try { document.body.removeChild(el); } catch { /* noop */ } }, 2600);
+        setTimeout(() => { try { document.body.removeChild(el);     } catch (err) { console.error(err); }
+ }, 2600);
       }
-    } catch { /* noop */ }
+    } catch (err) { console.error(err); }
   }
 
-  const openStep = (i: number) => {
-    const idx = clampIndex(i);
-    setActive(idx);
-    setModalStep(idx);
-    setModalOpen(true);
-    track("step_open_modal", { step: steps[idx].key });
-  };
-
-  const nextStep = () => setModalStep((s) => clampIndex(s + 1));
-  const prevStep = () => setModalStep((s) => clampIndex(s - 1));
+  const openStep = (i: number) => { setActive(i); setModalStep(i); setModalOpen(true); track("step_open_modal", { step: steps[i].key }); };
+  const nextStep = () => setModalStep((s) => Math.min(steps.length - 1, s + 1));
+  const prevStep = () => setModalStep((s) => Math.max(0, s - 1));
   const toggleConn = (k: keyof ConnectionMap) => setConnections((c) => ({ ...c, [k]: !c[k] }));
 
   return (
@@ -1104,11 +930,7 @@ function FlowDemo() {
         </div>
       </div>
 
-      <WizardModal
-        open={modalOpen}
-        onClose={() => { setModalOpen(false); setDone(null); }}
-        stepText={`Step ${modalStep + 1} of ${steps.length}`}
-      >
+      <WizardModal open={modalOpen} onClose={() => { setModalOpen(false); setDone(null); }} stepText={`Step ${modalStep + 1} of ${steps.length}`}>
         {!done ? (
           <>
             <div className="flex items-start justify-between gap-3">
@@ -1118,7 +940,6 @@ function FlowDemo() {
               </div>
             </div>
 
-            {/* CONNECT (slimmed list) */}
             {steps[modalStep].key === "connect" && (
               <div className="mt-3 text-sm space-y-4">
                 <div>
@@ -1130,12 +951,7 @@ function FlowDemo() {
                     ].map(({ k, label }) => {
                       const on = connections[k as keyof ConnectionMap];
                       return (
-                        <button
-                          key={k}
-                          onClick={() => toggleConn(k as keyof ConnectionMap)}
-                          className={`group flex items-center justify-between rounded-xl border px-3 py-2 transition
-                            ${on ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 bg-white hover:bg-neutral-50"}`}
-                        >
+                        <button key={k} onClick={() => toggleConn(k as keyof ConnectionMap)} className={`group flex items-center justify-between rounded-xl border px-3 py-2 transition ${on ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 bg-white hover:bg-neutral-50"}`}>
                           <span className="text-[13px] font-medium">{label}</span>
                           <span className={`h-5 w-9 rounded-full transition ${on ? "bg-white/20" : "bg-neutral-200"}`}>
                             <span className={`block h-5 w-5 rounded-full bg-white shadow transform transition ${on ? "translate-x-4" : "translate-x-0"}`} />
@@ -1157,12 +973,7 @@ function FlowDemo() {
                     ].map(({ k, label }) => {
                       const on = connections[k as keyof ConnectionMap];
                       return (
-                        <button
-                          key={k}
-                          onClick={() => toggleConn(k as keyof ConnectionMap)}
-                          className={`group flex items-center justify-between rounded-xl border px-3 py-2 transition
-                            ${on ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 bg-white hover:bg-neutral-50"}`}
-                        >
+                        <button key={k} onClick={() => toggleConn(k as keyof ConnectionMap)} className={`group flex items-center justify-between rounded-xl border px-3 py-2 transition ${on ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 bg-white hover:bg-neutral-50"}`}>
                           <span className="text-[13px] font-medium">{label}</span>
                           <span className={`h-5 w-9 rounded-full transition ${on ? "bg-white/20" : "bg-neutral-200"}`}>
                             <span className={`block h-5 w-5 rounded-full bg-white shadow transform transition ${on ? "translate-x-4" : "translate-x-0"}`} />
@@ -1177,28 +988,18 @@ function FlowDemo() {
               </div>
             )}
 
-            {/* AUDIENCE (pills) */}
             {steps[modalStep].key === "audience" && (
               <div className="mt-3 text-sm space-y-3">
                 <div className="text-xs text-neutral-500">Select a segment</div>
-                <ChoicePills
-                  options={segments.map((s) => ({ id: s.id as string, label: s.title, sub: `${s.size} guests` }))}
-                  value={selectedSegment as string}
-                  onChange={(v) => setSelectedSegment(v)}
-                />
+                <ChoicePills options={segments.map((s) => ({ id: s.id as string, label: s.title, sub: `${s.size} guests` }))} value={selectedSegment as string} onChange={(v) => setSelectedSegment(v)} />
                 <div className="text-xs text-neutral-600">Estimated reactivation rate adapts by recency/spend.</div>
               </div>
             )}
 
-            {/* OFFER (pills) */}
             {steps[modalStep].key === "offer" && (
               <div className="mt-3 text-sm space-y-3">
                 <div className="text-xs text-neutral-500">Choose an offer</div>
-                <ChoicePills
-                  options={offers.map((o) => ({ id: o.id as string, label: o.title }))}
-                  value={selectedOffer as string}
-                  onChange={(v) => setSelectedOffer(v)}
-                />
+                <ChoicePills options={offers.map((o) => ({ id: o.id as string, label: o.title }))} value={selectedOffer as string} onChange={(v) => setSelectedOffer(v)} />
                 <ul className="text-xs grid grid-cols-3 gap-2">
                   <li className="p-2 border border-neutral-200 rounded-xl text-center">Margin cap ≤ 6%</li>
                   <li className="p-2 border border-neutral-200 rounded-xl text-center">Brand-safe copy ✓</li>
@@ -1207,32 +1008,22 @@ function FlowDemo() {
               </div>
             )}
 
-            {/* SEND */}
             {steps[modalStep].key === "send" && (
               <div className="mt-3 text-sm space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <div className="text-xs text-neutral-500 mb-1">Channel</div>
-                    <ChoicePills
-                      options={[{ id: "SMS", label: "SMS" }, { id: "Email", label: "Email" }, { id: "Push", label: "Push" }]}
-                      value={scheduling.channel as "SMS" | "Email" | "Push"}
-                      onChange={(v) => setScheduling((s) => ({ ...s, channel: v }))}
-                    />
+                    <ChoicePills options={[{ id: "SMS", label: "SMS" }, { id: "Email", label: "Email" }, { id: "Push", label: "Push" }]} value={scheduling.channel as "SMS" | "Email" | "Push"} onChange={(v) => setScheduling((s) => ({ ...s, channel: v }))} />
                   </div>
                   <div>
                     <div className="text-xs text-neutral-500 mb-1">Send time</div>
-                    <ChoicePills
-                      options={[{ id: "In 1 hour", label: "In 1 hour" }, { id: "Tonight 7pm", label: "Tonight 7pm" }, { id: "Tomorrow morning", label: "Tomorrow morning" }]}
-                      value={scheduling.when as "In 1 hour" | "Tonight 7pm" | "Tomorrow morning"}
-                      onChange={(v) => setScheduling((s) => ({ ...s, when: v }))}
-                    />
+                    <ChoicePills options={[{ id: "In 1 hour", label: "In 1 hour" }, { id: "Tonight 7pm", label: "Tonight 7pm" }, { id: "Tomorrow morning", label: "Tomorrow morning" }]} value={scheduling.when as "In 1 hour" | "Tonight 7pm" | "Tomorrow morning"} onChange={(v) => setScheduling((s) => ({ ...s, when: v }))} />
                   </div>
                 </div>
                 <div className="text-xs text-neutral-600">Defaults are tuned for quick wins; you can refine later.</div>
               </div>
             )}
 
-            {/* MEASURE */}
             {steps[modalStep].key === "measure" && (
               <div className="mt-3 text-sm space-y-3">
                 <div className="grid grid-cols-2 gap-3">
@@ -1257,7 +1048,6 @@ function FlowDemo() {
               </div>
             )}
 
-            {/* Footer actions */}
             <div className="mt-5 flex items-center justify-between">
               <button onClick={prevStep} className="px-3 py-2 rounded-md border border-neutral-200 text-sm hover:bg-neutral-50">Back</button>
               {modalStep < steps.length - 1 ? (

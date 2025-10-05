@@ -1,4 +1,4 @@
-import React, {
+import {
   useState,
   useEffect,
   useMemo,
@@ -134,10 +134,8 @@ function track(event: string, payload: Payload = {}): void {
       window.dataLayer.push(common);
       return;
     }
-    // eslint-disable-next-line no-console
     console.log("[demo-analytics]", common);
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error("track error", err);
   }
 }
@@ -190,10 +188,8 @@ async function runTestsOnce() {
     const p = wait(5);
     console.assert(typeof (p as Promise<void>).then === "function", "wait should return a promise");
     await p;
-    // eslint-disable-next-line no-console
     console.log("[demo-tests] All runtime tests passed");
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error("[demo-tests] Failure", err);
   }
 }
@@ -647,8 +643,7 @@ function OpsCopilot() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
       track("agent_expert_approve", { segment: seg.id, offer: off.id, reactivated });
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error(err);
+        console.error(err);
     }
   }
 
@@ -819,8 +814,7 @@ function ImpactSummary() {
         const optimized = Math.max(0, Math.min(50, Math.round(sim.filter((r) => r?.type).length)));
         if (mounted) setSummary({ revenue: extraRevenue || 0, retained: retained || 0, optimized });
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error(err);
+            console.error(err);
       }
     };
     update();
@@ -861,8 +855,7 @@ function RecentEvents() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) return (JSON.parse(raw).simHistory || []).slice(0, 6) as SimRecord[];
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error(err);
+        console.error(err);
     }
     return [];
   });
@@ -874,8 +867,7 @@ function RecentEvents() {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) setEvents(((JSON.parse(raw).simHistory || []) as SimRecord[]).slice(0, 6));
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error(err);
+            console.error(err);
       }
     }, 1200);
     return () => {

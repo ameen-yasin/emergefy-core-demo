@@ -1132,13 +1132,14 @@ function FlowDemo() {
                 items={[
                   { id: "SMS", title: "SMS" },
                   { id: "Email", title: "Email" },
-                  { id: "Push", title: "Push" },
+                  { id: "Push", title: "Push Notification" },
                 ]}
                 value={scheduling.channel }
                 onChange={(v) => setScheduling((s) => ({ ...s, channel: v }))}
               />
               <RadioList
                 items={[
+                  { id: "Now", title: "Now" },
                   { id: "In 1 hour", title: "In 1 hour" },
                   { id: "Tonight 7pm", title: "Tonight 7pm" },
                   { id: "Tomorrow morning", title: "Tomorrow morning" },
@@ -1227,12 +1228,13 @@ function FlowDemo() {
             {steps[modalStep].key === "send" && (
               <div className="grid md:grid-cols-2 gap-4">
                 <RadioList
-                  items={[{ id: "SMS", title: "SMS" }, { id: "Email", title: "Email" }, { id: "Push", title: "Push" }]}
+                  items={[{ id: "SMS", title: "SMS" }, { id: "Email", title: "Email" }, { id: "Push", title: "Push Notification" }]}
                   value={scheduling.channel}
                   onChange={(v) => setScheduling((s) => ({ ...s, channel: v }))}
                 />
                 <RadioList
                   items={[
+                    { id: "Now", title: "Now" },
                     { id: "In 1 hour", title: "In 1 hour" },
                     { id: "Tonight 7pm", title: "Tonight 7pm" },
                     { id: "Tomorrow morning", title: "Tomorrow morning" },

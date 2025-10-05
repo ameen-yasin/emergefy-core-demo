@@ -9,9 +9,11 @@ import React, {
 //   type ReactNode,
 } from "react";
 
-/* ------------------------------------------------
+/* 
+------------------------------------------------
    Minimal inline icons (no deps)
--------------------------------------------------*/
+-------------------------------------------------
+*/
 
 const IconX = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" className="stroke-current">

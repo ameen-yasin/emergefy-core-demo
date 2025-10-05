@@ -34,7 +34,9 @@
 
 // export default App
 
-import InteractiveDemoPage from "./demo";
+// import InteractiveDemoPage from "./demo";
+// import InteractiveDemoPage from "./demo1";
+import InteractiveDemoPage from "./demo2";
 
 export default function App() {
   return <InteractiveDemoPage />;

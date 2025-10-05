@@ -89,10 +89,6 @@ html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
   opacity: 1 !important;
 }
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 /* Apple-style, clean, modern base (Tailwind-only) */
 @layer base {
   :root {

@@ -726,6 +726,7 @@ function OpsCopilot() {
 
 function ImpactSummary() {
   const [summary, setSummary] = useState({ revenue: 4220, retained: 11, optimized: 8 });
+  const [scenario, setScenario] = useState<string>("");
   useEffect(() => {
     let mounted = true;
     const update = () => {
@@ -737,15 +738,83 @@ function ImpactSummary() {
         const extraRevenue = Math.max(0, (obj.kpi?.mrr || 4200) - 4200);
         const retained = sim.reduce((a, r) => a + (r.reactivated || 0), 0);
         const optimized = Math.max(0, Math.min(50, Math.round(sim.filter((r) => r?.type).length)));
-        if (mounted) setSummary({ revenue: extraRevenue || 0, retained: retained || 0, optimized });
+        if (mounted) {
+          setSummary({ revenue: extraRevenue || 0, retained: retained || 0, optimized });
+          setScenario(typeof obj.scenario === "string" ? obj.scenario : "");
+        }
       } catch (err) { console.error(err); }
     };
     update(); const id = setInterval(update, 1200);
     return () => { mounted = false; clearInterval(id); };
   }, []);
+  const simulateScenario = (brand: "Dunkin" | "Tim Hortons") => {
+    try {
+      const now = Date.now();
+      const cfg = brand === "Dunkin"
+        ? {
+            scenarioName: "Dunkin — Grand Opening + Drive‑Thru Blitz",
+            reactivations: [150, 144, 140, 138, 135, 132, 128, 124, 120, 118, 115, 112, 110, 108, 105, 102, 100, 96, 92, 90, 88, 85, 82, 80, 78, 76, 74, 72, 70, 68],
+            audienceStart: 1800,
+            audienceStep: 20,
+            activePilots: 6,
+            projectedLift: 31,
+            type: "Dunkin Drive‑Thru Blitz",
+          }
+        : {
+            scenarioName: "Tim Hortons — Loyalty Relaunch Weekend",
+            reactivations: [120, 118, 116, 114, 110, 108, 104, 100, 98, 96, 94, 90, 88, 85, 82, 80, 78, 76, 74, 72, 70, 68, 66, 64, 62, 60],
+            audienceStart: 1400,
+            audienceStep: 15,
+            activePilots: 4,
+            projectedLift: 24,
+            type: "Tims Loyalty Relaunch",
+          };
+
+      const totalReactivated = cfg.reactivations.reduce((a, b) => a + b, 0);
+      const simHistory: SimRecord[] = cfg.reactivations.map((reactivated, i) => ({
+        id: String(now - i * 60000),
+        time: now - i * 60000,
+        audience: cfg.audienceStart + i * cfg.audienceStep,
+        reactivated,
+        type: cfg.type,
+      }));
+
+      const extraRevenue = Math.round(totalReactivated * AVG_BASKET);
+      const objRaw = localStorage.getItem(STORAGE_KEY) || "{}";
+      const obj = JSON.parse(objRaw || "{}");
+      obj.simHistory = simHistory;
+      obj.kpi = {
+        mrr: 4200 + extraRevenue,
+        activePilots: cfg.activePilots,
+        projectedLift: cfg.projectedLift,
+        last24: cfg.reactivations.slice(0, 7).map((n) => Math.max(1, Math.round(n / 10))),
+      } as Kpi;
+      obj.scenario = cfg.scenarioName;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+      setScenario(cfg.scenarioName);
+      setSummary({ revenue: extraRevenue, retained: totalReactivated, optimized: Math.min(50, simHistory.length) });
+      track("simulate_brand_scenario", { brand });
+    } catch (err) { console.error(err); }
+  };
+  const resetDemo = () => {
+    try {
+      const obj = { kpi: DEFAULT_KPI, simHistory: [], scenario: "" } as unknown as Record<string, unknown>;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+      setScenario("");
+      setSummary({ revenue: 0, retained: 0, optimized: 0 });
+      track("reset_demo_state");
+    } catch (err) { console.error(err); }
+  };
   return (
     <div className="mt-3 p-3 rounded-2xl bg-gradient-to-r from-neutral-50 to-neutral-100 border border-neutral-200 text-sm">
-      <span className="font-medium">Emergefy</span> brought in <span className="font-semibold">${summary.revenue}</span> extra revenue this month, retained <span className="font-semibold">{summary.retained}</span> at-risk customers, and optimized <span className="font-semibold">{summary.optimized}</span> inventory orders — all automatically.
+      <div>
+        <span className="font-medium">Emergefy</span> brought in <span className="font-semibold">${summary.revenue}</span> extra revenue this month{scenario ? <> for <span className="font-semibold">{scenario}</span></> : null}, retained <span className="font-semibold">{summary.retained}</span> at-risk customers, and optimized <span className="font-semibold">{summary.optimized}</span> inventory orders — all automatically.
+      </div>
+      <div className="mt-2 flex gap-2">
+        <button onClick={() => simulateScenario("Dunkin")} className="px-2 py-1 rounded-md bg-neutral-900 text-white text-[11px]">Simulate: Dunkin Drive‑Thru</button>
+        <button onClick={() => simulateScenario("Tim Hortons")} className="px-2 py-1 rounded-md border border-neutral-900 text-[11px]">Simulate: Tim Hortons Loyalty</button>
+        <button onClick={resetDemo} className="px-2 py-1 rounded-md border border-neutral-300 text-[11px] hover:bg-neutral-50">Reset</button>
+      </div>
     </div>
   );
 }

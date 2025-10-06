@@ -127,9 +127,11 @@ const OPS_HISTORY_KEY = "emergefy_ops_history_v1";
 const AVG_BASKET = 18;
 const DEFAULT_KPI: Kpi = { mrr: 4200, activePilots: 3, projectedLift: 12, last24: [5, 12, 8, 10, 6, 9, 7] };
 
-/* ------------------------------------------------
+/* 
+------------------------------------------------
    Utilities
--------------------------------------------------*/
+-------------------------------------------------
+*/
 
 function track(event: string, payload: Payload = {}): void {
   try {
@@ -280,7 +282,7 @@ function WizardModal({
 
 export default function InteractiveDemoPage() {
   const [screen, setScreen] = useState<"agent" | "flow" | "dashboard">("flow");
-  const [mode, setMode] = useState<"simple"  | "autonomous" | "pro">("simple");
+  const [mode, setMode] = useState<"simple"  | "autonomous" | "pro">("autonomous");
 
   useEffect(() => { track("page_view", { page: "vertical_ai_agent_ops_copilot" }); runTestsOnce(); }, []);
   return (
@@ -291,7 +293,7 @@ export default function InteractiveDemoPage() {
         </aside>
         <div className="col-span-12 md:col-span-9">
           <Header />
-          <ModeToggle mode={mode} onChange={setMode} />
+          {screen === "agent" && <ModeToggle mode={mode} onChange={setMode} />}
           <main className="mt-6 space-y-8">
             {screen === "dashboard" && <LiveDashboard />}
             {screen === "flow" && <FlowDemo key="flow" />}
@@ -1063,11 +1065,11 @@ function HeartBadge() {
   );
 }
 
-function Pill({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="px-2 py-1 rounded-full bg-neutral-100 border border-neutral-200 text-xs">{children}</span>
-  );
-}
+// function Pill({ children }: { children: React.ReactNode }) {
+//   return (
+//     <span className="px-2 py-1 rounded-full bg-neutral-100 border border-neutral-200 text-xs">{children}</span>
+//   );
+// }
 
 function AutonomousOpsAgent() {
   // Business primitives (reuse your demo segments/offers)
@@ -1323,12 +1325,12 @@ function addToolCall(name: string, input: Record<string, unknown>, _preview?: { 
         <div className="flex items-center gap-2">
           <HeartBadge />
           <h3 className="text-lg font-semibold">Ops Copilot (Autonomous Specialist)</h3>
-          <span className="text-xs text-neutral-500 flex items-center gap-1"><IconActivity /> ReAct loop</span>
+          {/* <span className="text-xs text-neutral-500 flex items-center gap-1"><IconActivity /> ReAct loop</span> */}
         </div>
         <div className="flex items-center gap-2">
-          <Pill>Guardrails: ≤6% margin</Pill>
+          {/* <Pill>Guardrails: ≤6% margin</Pill>
           <Pill>Brand-safe copy</Pill>
-          <Pill>Spend cap</Pill>
+          <Pill>Spend cap</Pill> */}
           <button
             onClick={() => (running ? void 0 : runMission())}
             disabled={running}

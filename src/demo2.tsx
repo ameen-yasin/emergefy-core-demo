@@ -99,7 +99,7 @@ type TranscriptType = "observe" | "think" | "act" | "verify";
 interface TranscriptItem { id: number; type: TranscriptType; text: string }
 interface BranchChoice { label: string; score: number }
 interface Verification { label: string; ok: boolean }
-interface ToolCall { id: number; name: string; input: { segment: string; offer: string }; status: "running" | "ok" | "error"; output?: { preview?: { reactivated: number; revenue: number } } }
+interface ToolCall { id: number; name: string; input: Record<string, unknown>; status: "running" | "ok" | "error"; output?: { preview?: { reactivated: number; revenue: number } } }
 
 // interface ConnectionMap {
 //   csv: boolean;
@@ -280,6 +280,8 @@ function WizardModal({
 
 export default function InteractiveDemoPage() {
   const [screen, setScreen] = useState<"agent" | "flow" | "dashboard">("flow");
+  const [mode, setMode] = useState<"simple"  | "autonomous" | "pro">("simple");
+
   useEffect(() => { track("page_view", { page: "vertical_ai_agent_ops_copilot" }); runTestsOnce(); }, []);
   return (
     <div className="min-h-screen bg-white text-neutral-900 antialiased py-8">
@@ -289,10 +291,11 @@ export default function InteractiveDemoPage() {
         </aside>
         <div className="col-span-12 md:col-span-9">
           <Header />
+          <ModeToggle mode={mode} onChange={setMode} />
           <main className="mt-6 space-y-8">
             {screen === "dashboard" && <LiveDashboard />}
             {screen === "flow" && <FlowDemo key="flow" />}
-            {screen === "agent" && <OpsCopilot />}
+            {screen === "agent" && (mode === "simple" ?  <OpsCopilotSimple /> : (mode === "autonomous") ? <AutonomousOpsAgent /> : <OpsCopilot />)}
           </main>
         </div>
       </div>
@@ -323,6 +326,41 @@ function Header() {
         <DemoBell />
       </div>
     </header>
+  );
+}
+
+function ModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: "simple" | "autonomous" | "pro";
+  onChange: (m: "simple" | "autonomous" | "pro") => void;
+}) {
+  return (
+    <div className="mt-4 flex items-center gap-2">
+      <span className="text-xs text-neutral-500">Demo mode</span>
+      <div className="inline-flex rounded-xl border border-neutral-200 overflow-hidden">
+        <button
+          className={`px-3 py-1 text-sm ${mode === "simple" ? "bg-neutral-900 text-white" : "bg-white"}`}
+          onClick={() => onChange("simple")}
+        >
+          Simple
+        </button>
+
+         <button
+          className={`px-3 py-1 text-sm ${mode === "autonomous" ? "bg-neutral-900 text-white" : "bg-white"}`}
+          onClick={() => onChange("autonomous")}
+        >
+          Autonomous
+        </button>
+        <button
+          className={`px-3 py-1 text-sm ${mode === "pro" ? "bg-neutral-900 text-white" : "bg-white"}`}
+          onClick={() => onChange("pro")}
+        >
+          Pro
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -488,8 +526,8 @@ function OpsCopilot() {
     return [];
   });
 
-  // 1) Paste your sample array anywhere above the component or inside OpsCopilot
-  const sampleOpsHistory: OpsRun[] = [
+  // 1) Sample ops history (memoized for stable identity)
+  const sampleOpsHistory: OpsRun[] = useMemo(() => ([
     { id: "cof-0001", time: 1764891600000, segment: "Commuter morning (14d)",     offer: "BOGO medium coffee",               reactivated: 260, revenue: 2080 },
     { id: "cof-0002", time: 1764888000000, segment: "App-lapsed 30–60d",          offer: "Coffee + donut ($2 off)",          reactivated: 190, revenue: 1520 },
     { id: "cof-0003", time: 1764884400000, segment: "Afternoon lull (2–5pm)",     offer: "Free Timbits with any drink",      reactivated: 120, revenue: 960  },
@@ -502,7 +540,7 @@ function OpsCopilot() {
     { id: "cof-0010", time: 1764859200000, segment: "Price-sensitive low spenders", offer: "Any medium for $1.49 (app)",     reactivated: 200, revenue: 1600 },
     { id: "cof-0011", time: 1764855600000, segment: "Evening snackers",           offer: "Munchkins/Timbits 20-pack $1 off", reactivated: 275, revenue: 2200 },
     { id: "cof-0012", time: 1764852000000, segment: "Store-radius (1–3 mi) lapsed", offer: "Coffee + donut ($2 off)",        reactivated: 165, revenue: 1320 },
-  ];
+  ]), []);
 
   // // 2) Create a loader that updates state + localStorage
   // const loadCoffeeRuns = useCallback(() => {
@@ -514,7 +552,7 @@ function OpsCopilot() {
   // }, [setOpsHistory]);
 
   
-  useEffect(() => { try { localStorage.setItem(OPS_HISTORY_KEY, JSON.stringify(sampleOpsHistory)); } catch (err) { console.error(err); } }, [opsHistory]);
+useEffect(() => { try { localStorage.setItem(OPS_HISTORY_KEY, JSON.stringify(sampleOpsHistory)); } catch (err) { console.error(err); } }, [sampleOpsHistory]);
   // useEffect(() => { try { localStorage.setItem(OPS_HISTORY_KEY, JSON.stringify(opsHistory.slice(0, 12))); } catch (err) { console.error(err); } }, [opsHistory]);
 
   const { seg, off, reactivated, revenue } = computePreviewMetrics(segments, offers, segmentId, offerId);
@@ -665,7 +703,7 @@ function OpsCopilot() {
                 <ul className="space-y-1 text-sm">
                   {toolCalls.map((c) => (
                     <li key={c.id} className="p-2 rounded-xl border border-neutral-200">
-                      <div className="font-mono text-xs">{c.name}(segment: "{c.input.segment}", offer: "{c.input.offer}")</div>
+                      <div className="font-mono text-xs">{c.name}(segment: "{String((c.input as Record<string, unknown>)['segment'])}", offer: "{String((c.input as Record<string, unknown>)['offer'])}")</div>
                       <div className="text-xs mt-1">Status: <span className={c.status === "ok" ? "text-green-600" : "text-neutral-600"}>{c.status}</span></div>
                       {c.output?.preview && <div className="text-xs text-neutral-600 mt-1">Preview → react {c.output.preview.reactivated}, sales ${c.output.preview.revenue}</div>}
                     </li>
@@ -772,6 +810,640 @@ function OpsCopilot() {
   );
 }
 
+function Explainer({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="rounded-xl border border-neutral-200 p-3 bg-white">
+      <div className="text-[11px] uppercase tracking-wide text-neutral-500">{title}</div>
+      <div className="text-sm mt-1 text-neutral-700">{text}</div>
+    </div>
+  );
+}
+
+function BigNumber({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="p-4 rounded-2xl border border-neutral-200 bg-white text-center">
+      <div className="text-[11px] uppercase tracking-wide text-neutral-500">{label}</div>
+      <div className="mt-1 font-semibold text-3xl leading-none tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+function OpsCopilotSimple() {
+  // Reuse your business data
+  const segments = useMemo<Segment[]>(() => [
+    { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 120, estReact: 0.09 },
+    { id: "vip", title: "VIP frequent", size: 42, estReact: 0.12 },
+    { id: "low-value", title: "Low spenders", size: 220, estReact: 0.03 },
+  ], []);
+  const offers = useMemo<Offer[]>(() => [
+    { id: "10-off",   title: "10% off next order",        marginImpact: -6, estLift: 0.08 },
+    { id: "bundle",   title: "Meal bundle (save $3)",     marginImpact: -3, estLift: 0.10 },
+    { id: "free-drink", title: "Free drink on $10+",      marginImpact: -4, estLift: 0.06 },
+  ], []);
+
+  // Default to an agent-recommended pair, but user can click pills to change
+  const initial = useMemo(() => recommendBestPair(segments, offers), [segments, offers]);
+  const [segmentId, setSegmentId] = useState<string>(initial.seg.id);
+  const [offerId, setOfferId]     = useState<string>(initial.off.id);
+
+  const { seg, off, reactivated, revenue } = computePreviewMetrics(segments, offers, segmentId, offerId);
+
+  // History (same key you already use)
+  const [opsHistory, setOpsHistory] = useState<OpsRun[]>(() => {
+    try {
+      const raw = localStorage.getItem(OPS_HISTORY_KEY);
+      return raw ? (JSON.parse(raw) as OpsRun[]) : [];
+    } catch { return []; }
+  });
+
+  // Persist on change
+  useEffect(() => {
+    try { localStorage.setItem(OPS_HISTORY_KEY, JSON.stringify(opsHistory)); } catch {
+      // ignore
+    }
+  }, [opsHistory]);
+
+  function runNow() {
+    const run: OpsRun = {
+      id: String(Date.now()),
+      time: Date.now(),
+      segment: seg.title,
+      offer: off.title,
+      reactivated,
+      revenue,
+    };
+    setOpsHistory((h) => [run, ...h].slice(0, 100));
+    // Also reflect in your existing STORAGE_KEY summary so Dashboard updates
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY) || "{}";
+      const obj = JSON.parse(raw);
+      const sim: SimRecord[] = Array.isArray(obj.simHistory) ? obj.simHistory : [];
+      sim.unshift({ id: run.id, time: run.time, audience: seg.size, reactivated, type: off.id });
+      obj.simHistory = sim.slice(0, 20);
+      obj.kpi = obj.kpi || { ...DEFAULT_KPI };
+      obj.kpi.mrr = Math.max(4200, (obj.kpi.mrr || 4200) + Math.round(reactivated * 2));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+    } catch {
+      // ignore
+    }
+    track("simple_run", { segment: seg.id, offer: off.id, reactivated, revenue });
+  }
+
+  function useAgentPick() {
+    const p = recommendBestPair(segments, offers);
+    setSegmentId(p.seg.id);
+    setOfferId(p.off.id);
+    track("simple_use_agent_pick", { segment: p.seg.id, offer: p.off.id });
+  }
+
+  return (
+    <section className="rounded-2xl border border-neutral-200 p-6 bg-white">
+      {/* Title row */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="relative h-6 w-6">
+            <span className="absolute inset-0 rounded-full bg-gradient-to-tr from-indigo-500/25 via-purple-500/20 to-fuchsia-500/25 blur-[6px] animate-ping" />
+            <span className="relative inline-flex h-6 w-6 items-center justify-center rounded-full bg-neutral-900 text-white">
+              <IconHeart size={14} />
+            </span>
+          </div>
+          <h3 className="text-lg font-semibold">Ops Copilot (Simple)</h3>
+          <span className="text-xs text-neutral-500">3 steps • 30 seconds</span>
+        </div>
+        <button onClick={useAgentPick} className="px-3 py-2 rounded-md border border-neutral-200 text-sm hover:bg-neutral-50">
+          Use Agent Pick
+        </button>
+      </div>
+
+      {/* Quick recommendation summary */}
+      <div className="mt-3 p-3 rounded-xl border border-neutral-200 bg-white text-sm">
+        Based on your guests and recent results, I recommend targeting <span className="font-semibold">{seg.title.toLowerCase()}</span> with <span className="font-semibold">{off.title.toLowerCase()}</span>. This should bring back about <span className="font-semibold">{reactivated}</span> guests and roughly <span className="font-semibold">${revenue}</span> in sales, while staying within the 6% margin cap.
+      </div>
+
+      {/* Step 1 / 2 / 3 */}
+      <div className="mt-4 grid md:grid-cols-3 gap-4">
+        <div className="rounded-2xl border border-neutral-200 p-4 bg-neutral-50">
+          <div className="text-[11px] uppercase tracking-wide text-neutral-500">Step 1</div>
+          <div className="font-semibold mt-1">Choose Audience</div>
+          <div className="mt-3">
+            <ChoicePills
+              options={segments.map(s => ({ id: s.id as string, label: s.title, sub: `${s.size}` }))}
+              value={segmentId}
+              onChange={setSegmentId}
+            />
+          </div>
+          <div className="mt-3">
+            <Explainer title="What is this?" text="A prebuilt slice of your customers. For the demo, pick a group and we’ll estimate how many come back." />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-neutral-200 p-4 bg-neutral-50">
+          <div className="text-[11px] uppercase tracking-wide text-neutral-500">Step 2</div>
+          <div className="font-semibold mt-1">Choose Offer</div>
+          <div className="mt-3">
+            <ChoicePills
+              options={offers.map(o => ({ id: o.id as string, label: o.title }))}
+              value={offerId}
+              onChange={setOfferId}
+            />
+          </div>
+          <div className="mt-3">
+            <Explainer title="Margin safety" text="All presets respect a 6% margin cap and brand-safe copy." />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-neutral-200 p-4 bg-neutral-50">
+          <div className="text-[11px] uppercase tracking-wide text-neutral-500">Step 3</div>
+          <div className="font-semibold mt-1">Estimated Impact</div>
+          <div className="mt-3 grid grid-cols-1 gap-2">
+            <BigNumber label="Audience" value={seg.size} />
+            <BigNumber label="Est. Reactivations" value={reactivated} />
+            <BigNumber label="Projected Sales" value={`$${revenue}`} />
+          </div>
+          <button onClick={runNow} className="mt-4 w-full px-4 py-2 rounded-md bg-neutral-900 text-white text-sm">
+            Run Now
+          </button>
+          <div className="text-[11px] text-neutral-500 mt-2 text-center">Demo only — no messages actually sent.</div>
+        </div>
+      </div>
+
+      {/* History (reusing your table style, kept simple) */}
+      <div className="mt-6 p-4 rounded-2xl border border-neutral-200 bg-white">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs text-neutral-500">Run history</div>
+          <div className="text-xs text-neutral-500">{opsHistory.length} run{opsHistory.length === 1 ? "" : "s"}</div>
+        </div>
+        {opsHistory.length === 0 ? (
+          <div className="text-sm text-neutral-500">No runs yet — click “Run Now”.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="text-left text-xs text-neutral-500 border-b border-neutral-200">
+                  <th className="py-2 pr-3">ID</th>
+                  <th className="py-2 pr-3">Time</th>
+                  <th className="py-2 pr-3">Segment</th>
+                  <th className="py-2 pr-3">Offer</th>
+                  <th className="py-2 pr-3 text-right">Reactivated</th>
+                  <th className="py-2 pr-3 text-right">Sales</th>
+                </tr>
+              </thead>
+              <tbody>
+                {opsHistory.map((r, i) => (
+                  <tr key={r.id} className={i % 2 ? "bg-neutral-50" : ""}>
+                    <td className="py-2 pr-3 text-xs text-neutral-600 whitespace-nowrap">#{r.id.slice(-4)}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap">{new Date(r.time).toLocaleString()}</td>
+                    <td className="py-2 pr-3">{r.segment}</td>
+                    <td className="py-2 pr-3">{r.offer}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{r.reactivated}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">${r.revenue}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------
+   Autonomous Specialist (ReAct-style, human-replacement)
+   - Plans → Gathers → Thinks → Acts → Monitors → Adapts → Reports
+   - Uses skills & tools (simulated), memory, guardrails
+-------------------------------------------------*/
+
+type Phase =
+  | "plan"
+  | "gather"
+  | "think"
+  | "act"
+  | "monitor"
+  | "adapt"
+  | "report";
+
+interface TimelineItem {
+  id: number;
+  phase: Phase;
+  text: string;
+}
+
+interface Skill {
+  id: string;
+  name: string;
+  run: (input?: Record<string, unknown>) => Promise<Record<string, unknown>>;
+}
+
+interface Policy {
+  id: string;
+  label: string;
+  check: (ctx: Record<string, unknown>) => boolean;
+}
+
+const AGENT_MEMORY_KEY = "emergefy_agent_memory_v1";
+
+function loadMemory<T = Record<string, unknown>>(): T {
+  try { const raw = localStorage.getItem(AGENT_MEMORY_KEY); return raw ? JSON.parse(raw) as T : ({} as T); }
+  catch { return {} as T; }
+}
+function saveMemory(obj: Record<string, unknown>) {
+  try { localStorage.setItem(AGENT_MEMORY_KEY, JSON.stringify(obj)); } catch (err) { console.error(err); }
+}
+
+/** galaxy heartbeat badge (tiny) */
+function HeartBadge() {
+  return (
+    <div className="relative h-6 w-6">
+      <span className="absolute inset-0 rounded-full bg-gradient-to-tr from-indigo-500/25 via-purple-500/20 to-fuchsia-500/25 blur-[6px] animate-ping" />
+      <span className="relative inline-flex h-6 w-6 items-center justify-center rounded-full bg-neutral-900 text-white">
+        <IconHeart size={14} />
+      </span>
+    </div>
+  );
+}
+
+function Pill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="px-2 py-1 rounded-full bg-neutral-100 border border-neutral-200 text-xs">{children}</span>
+  );
+}
+
+function AutonomousOpsAgent() {
+  // Business primitives (reuse your demo segments/offers)
+  const segments = useMemo<Segment[]>(() => [
+    { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 120, estReact: 0.09 },
+    { id: "vip",           title: "VIP frequent",        size: 42,  estReact: 0.12 },
+    { id: "low-value",     title: "Low spenders",        size: 220, estReact: 0.03 },
+  ], []);
+  const offers = useMemo<Offer[]>(() => [
+    { id: "10-off",     title: "10% off next order",        marginImpact: -6, estLift: 0.08 },
+    { id: "bundle",     title: "Meal bundle (save $3)",     marginImpact: -3, estLift: 0.10 },
+    { id: "free-drink", title: "Free drink w/order $10+",   marginImpact: -4, estLift: 0.06 },
+  ], []);
+
+  // Agent state
+  const [, setPhase] = useState<Phase>("plan");
+  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+  const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
+  const [progress, setProgress] = useState(0);
+  const [running, setRunning] = useState(false);
+
+  // Memory & context
+  const [memory, setMemory] = useState<Record<string, unknown>>(() => loadMemory());
+  const [opsHistory, setOpsHistory] = useState<OpsRun[]>(() => {
+    try {
+      const raw = localStorage.getItem(OPS_HISTORY_KEY);
+      return raw ? (JSON.parse(raw) as OpsRun[]) : [];
+    } catch { return []; }
+  });
+
+  // Persist history
+  useEffect(() => { try { localStorage.setItem(OPS_HISTORY_KEY, JSON.stringify(opsHistory)); } catch (err) { console.error(err); } }, [opsHistory]);
+
+  // ===== Skills registry (simulated) =====
+  const skills: Skill[] = useMemo(() => [
+    {
+      id: "fetch_pos_segments",
+      name: "Fetch segments from POS/Sheets",
+      run: async () => {
+        await wait(1200);
+        const pos = ["square", "toast", "shopifypos", "foodics"].filter(Boolean);
+        return { connectors: pos, segmentCounts: segments.reduce((a, s) => ({ ...a, [s.id]: s.size }), {} as Record<string, number>) };
+      },
+    },
+    {
+      id: "score_candidate_strategies",
+      name: "Score strategies",
+      run: async (input?: Record<string, unknown>) => {
+        void input;
+        await wait(900);
+        const best = recommendBestPair(segments, offers);
+        return { pick: { segmentId: best.seg.id, offerId: best.off.id }, considered: 7, rationale: "lift×size under margin cap" };
+      },
+    },
+    {
+      id: "simulate_offer",
+      name: "Simulate impact",
+      run: async (input?: Record<string, unknown>) => {
+        await wait(800);
+        const seg = segments.find(s => s.id === String(input?.segmentId)) ?? segments[0];
+        const off = offers.find(o => o.id === String(input?.offerId)) ?? offers[0];
+        const { reactivated, revenue } = computePreviewMetrics(segments, offers, seg.id, off.id);
+        return { reactivated, revenue, segmentTitle: seg.title, offerTitle: off.title };
+      },
+    },
+    {
+      id: "schedule_send",
+      name: "Schedule campaign",
+      run: async (input?: Record<string, unknown>) => {
+        void input;
+        await wait(700);
+        return { scheduledFor: "Tonight 7pm", channel: "SMS" };
+      },
+    },
+    {
+      id: "monitor_kpis",
+      name: "Monitor KPIs",
+      run: async () => {
+        await wait(900);
+        return { deliveryOk: true, failRate: 0.5, earlyCTR: 6.2 };
+      },
+    },
+    {
+      id: "adaptation",
+      name: "Adapt offer if needed",
+      run: async (input?: Record<string, unknown>) => {
+        void input;
+        await wait(600);
+        // Small adaptive tweak example
+        return { adjustedCopy: "Save $3 on your meal — today only", change: "minor_copy" };
+      },
+    },
+    {
+      id: "final_report",
+      name: "Produce report",
+      run: async (input?: Record<string, unknown>) => {
+        void input;
+        await wait(500);
+        return { summary: "Goal achieved within guardrails. Ready to repeat weekly.", confidence: 0.86 };
+      },
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], []);
+
+  // ===== Guardrail policies =====
+  const policies: Policy[] = [
+    { id: "margin_cap",  label: "Margin ≤ 6%",         check: (ctx) => Math.abs(Number(ctx.marginImpact ?? -6)) <= 6 },
+    { id: "aud_size",    label: "Audience > 50",       check: (ctx) => Number(ctx.audience ?? 0) > 50 },
+    { id: "brand_safe",  label: "Brand-safe copy ✓",   check: () => true },
+  ];
+
+  const summaryPick = useMemo(() => {
+    const best = recommendBestPair(segments, offers);
+    const mem = (memory || {}) as Record<string, unknown>;
+    const lastSegId = String(mem.lastSegment || "");
+    const lastOfferId = String(mem.lastOffer || "");
+    const segObj = segments.find(s => s.id === lastSegId) ?? best.seg;
+    const offObj = offers.find(o => o.id === lastOfferId) ?? best.off;
+    const m = computePreviewMetrics(segments, offers, segObj.id, offObj.id);
+    return { seg: m.seg, off: m.off, reactivated: m.reactivated, revenue: m.revenue };
+  }, [memory, segments, offers]);
+
+  function addTimeline(phase: Phase, text: string) {
+    setTimeline((t) => [...t, { id: Date.now() + Math.floor(Math.random() * 999), phase, text }]);
+  }
+function addToolCall(name: string, input: Record<string, unknown>, _preview?: { reactivated?: number; revenue?: number }) {
+  void _preview;
+  const id = Date.now() + Math.floor(Math.random() * 999);
+  setToolCalls((c) => [...c, { id, name, input: input, status: "running" }]);
+  return id;
+}
+  function completeToolCall(id: number, output: Record<string, unknown>) {
+    setToolCalls((c) => c.map((x) => (x.id === id ? { ...x, status: "ok", output: { preview: ("reactivated" in output && "revenue" in output) ? { reactivated: Number(output.reactivated), revenue: Number(output.revenue) } : undefined } } : x)));
+  }
+
+  // ===== Mission run (autonomous loop) =====
+  const runningRef = useRef(running);
+  useEffect(() => { runningRef.current = running; }, [running]);
+
+  async function runMission() {
+    if (runningRef.current) return;
+    setRunning(true);
+    setTimeline([]); setToolCalls([]); setProgress(0);
+
+    try {
+      // PLAN
+      setPhase("plan"); setProgress(8);
+      addTimeline("plan", "Mission: Recover lapsed customers without exceeding 6% margin hit. Secondary: preserve brand tone.");
+      await wait(600);
+
+      // GATHER
+      setPhase("gather"); setProgress(18);
+      addTimeline("gather", "Gathering segments from POS/Sheets connectors…");
+      const idFetch = addToolCall("Connectors.fetchSegments", {});
+      const fetched = await skills.find(s => s.id === "fetch_pos_segments")!.run();
+      completeToolCall(idFetch, fetched);
+      addTimeline("gather", `Found segments: ${Object.keys(fetched.segmentCounts as Record<string, number>).length}.`);
+
+      // THINK
+      setPhase("think"); setProgress(35);
+      addTimeline("think", "Scoring candidate strategies under guardrails…");
+      const idScore = addToolCall("Strategy.score", {});
+      const scoredRaw = await skills.find(s => s.id === "score_candidate_strategies")!.run();
+      completeToolCall(idScore, scoredRaw);
+      const scored = scoredRaw as { pick: { segmentId: string; offerId: string }; considered?: number; rationale?: string };
+      const segmentId = String(scored.pick.segmentId);
+      const offerId   = String(scored.pick.offerId);
+      const segObj = segments.find(s => s.id === segmentId) ?? segments[0];
+      const offObj = offers.find(o => o.id === offerId) ?? offers[0];
+      addTimeline("think", `Picked: ${segObj.title} + “${offObj.title}”. Rationale: ${(scored.rationale as string) || "best lift×size"}`);
+
+      // Verify guardrails pre-execution
+      const preCtx = { audience: segObj.size, marginImpact: offObj.marginImpact };
+      const fails = policies.filter(p => !p.check(preCtx));
+      if (fails.length) {
+        addTimeline("think", `Adjusting due to guardrails: ${fails.map(f => f.label).join(", ")}`);
+      }
+
+      // ACT (simulate offer)
+      setPhase("act"); setProgress(55);
+      const idSim = addToolCall("Offer.simulate", { segmentId, offerId });
+      const simulated = await skills.find(s => s.id === "simulate_offer")!.run({ segmentId, offerId }) as { reactivated: number; revenue: number; segmentTitle: string; offerTitle: string };
+      completeToolCall(idSim, simulated);
+      addTimeline("act", `Projected: ${(simulated.reactivated as number)} reactivations → $${(simulated.revenue as number)} sales.`);
+
+      // SCHEDULE
+      const idSched = addToolCall("Campaign.schedule", { channel: "SMS", when: "Tonight 7pm" });
+      const sched = await skills.find(s => s.id === "schedule_send")!.run({ channel: "SMS", when: "Tonight 7pm" }) as { scheduledFor: string; channel: string };
+      completeToolCall(idSched, sched);
+      addTimeline("act", `Scheduled via ${String(sched.channel)} at ${String(sched.scheduledFor)}.`);
+
+      // Persist run (realistic human-replacement effect)
+      const run: OpsRun = {
+        id: String(Date.now()),
+        time: Date.now(),
+        segment: String(simulated.segmentTitle),
+        offer: String(simulated.offerTitle),
+        reactivated: Number(simulated.reactivated),
+        revenue: Number(simulated.revenue),
+      };
+      setOpsHistory((h) => [run, ...h].slice(0, 100));
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY) || "{}";
+        const obj = JSON.parse(raw);
+        const sim: SimRecord[] = Array.isArray(obj.simHistory) ? obj.simHistory : [];
+        sim.unshift({ id: run.id, time: run.time, audience: segObj.size, reactivated: run.reactivated, type: offObj.id });
+        obj.simHistory = sim.slice(0, 20);
+        obj.kpi = obj.kpi || { ...DEFAULT_KPI };
+        obj.kpi.mrr = Math.max(4200, (obj.kpi.mrr || 4200) + Math.round(run.reactivated * 2));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+      } catch {
+        // ignore
+      }
+
+      // MONITOR
+      setPhase("monitor"); setProgress(70);
+      const idMon = addToolCall("KPIs.monitor", {});
+      const mon = await skills.find(s => s.id === "monitor_kpis")!.run();
+      completeToolCall(idMon, mon);
+      addTimeline("monitor", `Delivery OK. Early CTR ${(mon.earlyCTR as number)}%. Fail ${Number(mon.failRate).toFixed(1)}%.`);
+
+      // ADAPT (minor tweak)
+      setPhase("adapt"); setProgress(82);
+      const idAdapt = addToolCall("Offer.adapt", { basis: "early_ctr" });
+      const adapt = await skills.find(s => s.id === "adaptation")!.run({ ctr: mon.earlyCTR });
+      completeToolCall(idAdapt, adapt);
+      addTimeline("adapt", `Applied tweak: ${(adapt.change as string)} → “${String(adapt.adjustedCopy)}”.`);
+
+      // REPORT
+      setPhase("report"); setProgress(100);
+      const idRep = addToolCall("Reports.finalize", {});
+      const rep = await skills.find(s => s.id === "final_report")!.run({});
+      completeToolCall(idRep, rep);
+      addTimeline("report", String(rep.summary));
+      track("autonomous_mission_complete", { reactivated: run.reactivated, revenue: run.revenue, confidence: rep.confidence });
+
+      // Memory update
+      const mem = { ...(memory || {}), lastSegment: segObj.id, lastOffer: offObj.id, lastRevenue: run.revenue, lastReactivated: run.reactivated };
+      saveMemory(mem);
+      setMemory(mem);
+    } catch (err) {
+      addTimeline("report", "Mission failed unexpectedly — safe stop.");
+      console.error(err);
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-neutral-200 p-6 bg-white">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <HeartBadge />
+          <h3 className="text-lg font-semibold">Ops Copilot (Autonomous Specialist)</h3>
+          <span className="text-xs text-neutral-500 flex items-center gap-1"><IconActivity /> ReAct loop</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Pill>Guardrails: ≤6% margin</Pill>
+          <Pill>Brand-safe copy</Pill>
+          <Pill>Spend cap</Pill>
+          <button
+            onClick={() => (running ? void 0 : runMission())}
+            disabled={running}
+            className={`px-3 py-2 rounded-md text-sm ${running ? "border border-neutral-200 text-neutral-500" : "bg-neutral-900 text-white"}`}
+          >
+            {running ? "Running…" : "Start Mission"}
+          </button>
+        </div>
+      </div>
+
+      {/* Progress */}
+      <div className="mt-3"><EnergyBar progress={progress} /></div>
+
+      {/* Adaptive recommendation summary */}
+      <div className="mt-3 p-3 rounded-xl border border-neutral-200 bg-white text-sm">
+        Based on current context, best next move: target <span className="font-semibold">{summaryPick.seg.title.toLowerCase()}</span> with <span className="font-semibold">{summaryPick.off.title.toLowerCase()}</span>. Estimated <span className="font-semibold">{summaryPick.reactivated}</span> reactivations (~<span className="font-semibold">${summaryPick.revenue}</span>), within guardrails.
+      </div>
+      
+      <div className="mt-4 grid md:grid-cols-3 gap-4">
+        {/* Mission & Policies */}
+        <div className="rounded-2xl border border-neutral-200 p-4 bg-neutral-50">
+          <div className="text-xs text-neutral-500">Mission</div>
+          <div className="mt-1 text-sm">
+            Recover lapsed guests this week without exceeding a 6% margin hit; keep copy brand-safe; schedule during high-attention windows.
+          </div>
+          <div className="mt-3 text-xs text-neutral-500">Policies</div>
+          <ul className="mt-1 text-sm space-y-1">
+            {policies.map(p => <li key={p.id} className="p-2 rounded-md border border-neutral-200 bg-white">{p.label}</li>)}
+          </ul>
+          <div className="mt-3 text-xs text-neutral-500">Memory</div>
+          <div className="mt-1 text-xs p-2 rounded-md border border-neutral-200 bg-white">
+            lastSegment: {String((memory).lastSegment || "—")}<br />
+            lastOffer: {String((memory ).lastOffer || "—")}<br />
+            lastReactivated: {String((memory ).lastReactivated || "—")}<br />
+            lastRevenue: {String((memory ).lastRevenue || "—")}
+          </div>
+        </div>
+
+        {/* Timeline (reason → action) */}
+        <div className="rounded-2xl border border-neutral-200 p-4 bg-white md:col-span-2">
+          <div className="text-xs text-neutral-500">Execution Timeline</div>
+          <div className="mt-2 space-y-2">
+            {timeline.length === 0 ? (
+              <div className="text-sm text-neutral-500">Press “Start Mission” to watch the specialist work end-to-end.</div>
+            ) : (
+              timeline.map(t => (
+                <div key={t.id} className="p-2 rounded-xl border border-neutral-200">
+                  <div className="text-[11px] uppercase tracking-wide text-neutral-500">{t.phase}</div>
+                  <div className="text-sm">{t.text}</div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Tool calls */}
+          {toolCalls.length > 0 && (
+            <div className="mt-4">
+              <div className="text-xs text-neutral-500 mb-1">Tools</div>
+              <ul className="space-y-1 text-sm">
+                {toolCalls.map((c) => (
+                  <li key={c.id} className="p-2 rounded-xl border border-neutral-200">
+                    <div className="font-mono text-xs">{c.name}({Object.entries(c.input || {}).map(([k, v]) => `${k}: ${String(v)}`).join(", ")})</div>
+                    <div className="text-xs mt-1">Status: <span className={c.status === "ok" ? "text-green-600" : "text-neutral-600"}>{c.status}</span></div>
+                    {c.output?.preview && <div className="text-xs text-neutral-600 mt-1">Preview → react {c.output.preview.reactivated}, sales ${c.output.preview.revenue}</div>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {/* Full-width history */}
+        <div className="md:col-span-3 p-4 rounded-2xl border border-neutral-200 bg-white">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs text-neutral-500">Run history</div>
+            <div className="text-xs text-neutral-500">{opsHistory.length} run{opsHistory.length === 1 ? "" : "s"}</div>
+          </div>
+          {opsHistory.length === 0 ? (
+            <div className="text-sm text-neutral-500">No runs yet — start a mission.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="text-left text-xs text-neutral-500 border-b border-neutral-200">
+                    <th className="py-2 pr-3">ID</th>
+                    <th className="py-2 pr-3">Time</th>
+                    <th className="py-2 pr-3">Segment</th>
+                    <th className="py-2 pr-3">Offer</th>
+                    <th className="py-2 pr-3 text-right">Reactivated</th>
+                    <th className="py-2 pr-3 text-right">Sales</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {opsHistory.map((r, i) => (
+                    <tr key={r.id} className={i % 2 ? "bg-neutral-50" : ""}>
+                      <td className="py-2 pr-3 text-xs text-neutral-600 whitespace-nowrap">#{r.id.slice(-4)}</td>
+                      <td className="py-2 pr-3 whitespace-nowrap">{new Date(r.time).toLocaleString()}</td>
+                      <td className="py-2 pr-3">{r.segment}</td>
+                      <td className="py-2 pr-3">{r.offer}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums">{r.reactivated}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums">${r.revenue}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
+
 /* ------------------------------------------------
    Dashboard
 -------------------------------------------------*/
@@ -860,7 +1532,7 @@ function ImpactSummary() {
   return (
     <div className="mt-3 p-3 rounded-2xl bg-gradient-to-r from-neutral-50 to-neutral-100 border border-neutral-200 text-sm">
       <div>
-        <span className="font-medium">EngageOS</span> brought in <span className="font-semibold">${summary.revenue}</span> extra revenue this month{scenario ? <> for <span className="font-semibold">{scenario}</span></> : null}, retained <span className="font-semibold">{summary.retained}</span> at-risk customers, and optimized <span className="font-semibold">{summary.optimized}</span> inventory orders — all automatically.
+        <span className="font-medium">Emergefy</span> brought in <span className="font-semibold">${summary.revenue}</span> extra revenue this month{scenario ? <> for <span className="font-semibold">{scenario}</span></> : null}, retained <span className="font-semibold">{summary.retained}</span> at-risk customers, and optimized <span className="font-semibold">{summary.optimized}</span> inventory orders — all automatically.
       </div>
       <div className="mt-2 flex gap-2">
         <button onClick={() => simulateScenario("Dunkin")} className="px-2 py-1 rounded-md bg-neutral-900 text-white text-[11px]">Simulate: Dunkin Drive‑Thru</button>

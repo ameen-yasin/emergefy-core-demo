@@ -487,16 +487,44 @@ function OpsCopilot() {
     try { const raw = localStorage.getItem(OPS_HISTORY_KEY); if (raw) return JSON.parse(raw) as OpsRun[]; } catch (err) { console.error(err); }
     return [];
   });
-  useEffect(() => { try { localStorage.setItem(OPS_HISTORY_KEY, JSON.stringify(opsHistory.slice(0, 12))); } catch (err) { console.error(err); } }, [opsHistory]);
+
+  // 1) Paste your sample array anywhere above the component or inside OpsCopilot
+  const sampleOpsHistory: OpsRun[] = [
+    { id: "cof-0001", time: 1764891600000, segment: "Commuter morning (14d)",     offer: "BOGO medium coffee",               reactivated: 260, revenue: 2080 },
+    { id: "cof-0002", time: 1764888000000, segment: "App-lapsed 30–60d",          offer: "Coffee + donut ($2 off)",          reactivated: 190, revenue: 1520 },
+    { id: "cof-0003", time: 1764884400000, segment: "Afternoon lull (2–5pm)",     offer: "Free Timbits with any drink",      reactivated: 120, revenue: 960  },
+    { id: "cof-0004", time: 1764880800000, segment: "VIP frequent (AM)",          offer: "Any medium for $1.49 (app)",       reactivated: 210, revenue: 1680 },
+    { id: "cof-0005", time: 1764877200000, segment: "Lapsed breakfast buyers",    offer: "Breakfast combo save $3",          reactivated: 300, revenue: 2400 },
+    { id: "cof-0006", time: 1764873600000, segment: "Drive-thru heavy routes",    offer: "BOGO medium coffee",               reactivated: 180, revenue: 1440 },
+    { id: "cof-0007", time: 1764870000000, segment: "Midweek office clusters",    offer: "Donut dozen add-on ($3 off)",      reactivated: 240, revenue: 1920 },
+    { id: "cof-0008", time: 1764866400000, segment: "Weekend late breakfast",     offer: "Free Timbits with any drink",      reactivated: 150, revenue: 1200 },
+    { id: "cof-0009", time: 1764862800000, segment: "Cold brew seekers (warm)",   offer: "BOGO cold brew",                    reactivated: 320, revenue: 2560 },
+    { id: "cof-0010", time: 1764859200000, segment: "Price-sensitive low spenders", offer: "Any medium for $1.49 (app)",     reactivated: 200, revenue: 1600 },
+    { id: "cof-0011", time: 1764855600000, segment: "Evening snackers",           offer: "Munchkins/Timbits 20-pack $1 off", reactivated: 275, revenue: 2200 },
+    { id: "cof-0012", time: 1764852000000, segment: "Store-radius (1–3 mi) lapsed", offer: "Coffee + donut ($2 off)",        reactivated: 165, revenue: 1320 },
+  ];
+
+  // // 2) Create a loader that updates state + localStorage
+  // const loadCoffeeRuns = useCallback(() => {
+  //   setOpsHistory(sampleOpsHistory);
+  //   try {
+  //     localStorage.setItem(OPS_HISTORY_KEY, JSON.stringify(sampleOpsHistory));
+  //   } catch (err) { console.error(err); }
+  //   // track("ops_history_seeded", { count: sampleOpsHistory.length, flavor: "coffee" });
+  // }, [setOpsHistory]);
+
+  
+  useEffect(() => { try { localStorage.setItem(OPS_HISTORY_KEY, JSON.stringify(sampleOpsHistory)); } catch (err) { console.error(err); } }, [opsHistory]);
+  // useEffect(() => { try { localStorage.setItem(OPS_HISTORY_KEY, JSON.stringify(opsHistory.slice(0, 12))); } catch (err) { console.error(err); } }, [opsHistory]);
 
   const { seg, off, reactivated, revenue } = computePreviewMetrics(segments, offers, segmentId, offerId);
 
   // slower timings per request
-  const INTERNAL_API_WAIT = 800;   // was 500
-  const STEP_WAIT = 1200;          // was 600
+  const INTERNAL_API_WAIT = 4800;   // was 500
+  const STEP_WAIT = 8200;          // was 600
 
   const recordRun = useCallback((run: OpsRun) => {
-    setOpsHistory((h) => [run, ...h].slice(0, 12));
+    setOpsHistory((h) => [run, ...h]);
   }, []);
 
   const stepSession = useCallback(async () => {
@@ -659,26 +687,6 @@ function OpsCopilot() {
               </div>
             )}
           </div>
-
-          {/* History of previous Ops Copilot runs */}
-          <div className="p-4 rounded-2xl border border-neutral-200 bg-white">
-            <div className="text-xs text-neutral-500 mb-2">Run history</div>
-            {opsHistory.length === 0 ? (
-              <div className="text-sm text-neutral-500">No runs yet — press Play or Step to generate a plan.</div>
-            ) : (
-              <ul className="space-y-2 text-sm">
-                {opsHistory.map((r) => (
-                  <li key={r.id} className="flex items-center justify-between border border-neutral-200 rounded-xl p-2">
-                    <div>
-                      <div className="font-medium">{r.offer} • {r.segment}</div>
-                      <div className="text-xs text-neutral-500">{new Date(r.time).toLocaleString()} • react {r.reactivated} • sales ${r.revenue}</div>
-                    </div>
-                    <div className="text-xs text-neutral-600">#{r.id.slice(-4)}</div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
         </div>
 
         <div className="relative">
@@ -714,7 +722,51 @@ function OpsCopilot() {
               <div className="w-24 h-24 rounded-full ring-4 ring-neutral-300/60 bg-neutral-200/10 transition" />
             </div>
           )}
+        
+        
         </div>
+
+        {/* Full-width Run history (table) */}
+        <div className="md:col-span-2 p-4 rounded-2xl border border-neutral-200 bg-white">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs text-neutral-500">Run history</div>
+            <div className="text-xs text-neutral-500">
+              {opsHistory.length} run{opsHistory.length === 1 ? "" : "s"}
+            </div>
+          </div>
+
+          {opsHistory.length === 0 ? (
+            <div className="text-sm text-neutral-500">No runs yet — press Play or Step to generate a plan.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="text-left text-xs text-neutral-500 border-b border-neutral-200">
+                    <th className="py-2 pr-3">ID</th>
+                    <th className="py-2 pr-3">Time</th>
+                    <th className="py-2 pr-3">Segment</th>
+                    <th className="py-2 pr-3">Offer</th>
+                    <th className="py-2 pr-3 text-right">Reactivated</th>
+                    <th className="py-2 pr-3 text-right">Sales</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {opsHistory.map((r, i) => (
+                    <tr key={r.id} className={i % 2 ? "bg-neutral-50" : ""}>
+                      <td className="py-2 pr-3 text-xs text-neutral-600 whitespace-nowrap">#{r.id.slice(-4)}</td>
+                      <td className="py-2 pr-3 whitespace-nowrap">{new Date(r.time).toLocaleString()}</td>
+                      <td className="py-2 pr-3">{r.segment}</td>
+                      <td className="py-2 pr-3">{r.offer}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums">{r.reactivated}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums">${r.revenue}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
       </div>
     </section>
   );
@@ -808,7 +860,7 @@ function ImpactSummary() {
   return (
     <div className="mt-3 p-3 rounded-2xl bg-gradient-to-r from-neutral-50 to-neutral-100 border border-neutral-200 text-sm">
       <div>
-        <span className="font-medium">Emergefy</span> brought in <span className="font-semibold">${summary.revenue}</span> extra revenue this month{scenario ? <> for <span className="font-semibold">{scenario}</span></> : null}, retained <span className="font-semibold">{summary.retained}</span> at-risk customers, and optimized <span className="font-semibold">{summary.optimized}</span> inventory orders — all automatically.
+        <span className="font-medium">EngageOS</span> brought in <span className="font-semibold">${summary.revenue}</span> extra revenue this month{scenario ? <> for <span className="font-semibold">{scenario}</span></> : null}, retained <span className="font-semibold">{summary.retained}</span> at-risk customers, and optimized <span className="font-semibold">{summary.optimized}</span> inventory orders — all automatically.
       </div>
       <div className="mt-2 flex gap-2">
         <button onClick={() => simulateScenario("Dunkin")} className="px-2 py-1 rounded-md bg-neutral-900 text-white text-[11px]">Simulate: Dunkin Drive‑Thru</button>

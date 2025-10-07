@@ -436,7 +436,84 @@ function InputLike({ placeholder, value }: { placeholder: string; value?: string
 }
 
 /* ===================== Full Playbooks flow (Connection → Agent → Review) ===================== */
-function FlowDemo() {
+
+/** Lightweight guided overlay for Playbooks onboarding */
+function FlowTourOverlay({
+  open,
+  onClose,
+  steps,
+  anchors,
+}: {
+  open: boolean;
+  onClose: () => void;
+  steps: { key: string; title: string; body: string }[];
+  anchors: Record<string, React.RefObject<HTMLElement>>;
+}) {
+  const [idx, setIdx] = useState(0);
+  const [rect, setRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function update() {
+      const key = steps[idx]?.key;
+      const el = key ? anchors[key]?.current : null;
+      if (el) {
+        const r = el.getBoundingClientRect();
+        setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+      }
+    }
+    update();
+    const onResize = () => update();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onResize, true);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onResize, true);
+    };
+  }, [open, idx, anchors, steps]);
+
+  if (!open) return null;
+  const step = steps[idx];
+  const calloutLeft = rect ? Math.min(Math.max(rect.left + rect.width + 12, 12), window.innerWidth - 320 - 12) : 24;
+  const calloutTop = rect ? Math.min(Math.max(rect.top, 12), window.innerHeight - 160) : 24;
+
+  return (
+    <div className="fixed inset-0 z-[60]">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      {/* highlight box */}
+      {rect && (
+        <div
+          className="fixed pointer-events-none rounded-xl ring-2 ring-white/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]"
+          style={{ top: rect.top - 6, left: rect.left - 6, width: rect.width + 12, height: rect.height + 12 }}
+        />
+      )}
+      {/* callout */}
+      <div
+        className="fixed w-[320px] rounded-xl bg-white border border-neutral-200 shadow-lg p-3 text-sm"
+        style={{ top: calloutTop, left: calloutLeft }}
+      >
+        <div className="text-[11px] uppercase tracking-wide text-neutral-500">Onboarding</div>
+        <div className="font-semibold mt-0.5">{step?.title}</div>
+        <div className="text-neutral-700 mt-1">{step?.body}</div>
+        <div className="mt-2 flex items-center justify-between">
+          <button className="px-2 py-1 rounded-md border border-neutral-200 text-xs" onClick={() => setIdx((i) => Math.max(0, i - 1))} disabled={idx === 0}>
+            Back
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="text-[11px] text-neutral-500">{idx + 1} / {steps.length}</div>
+            {idx < steps.length - 1 ? (
+              <button className="px-3 py-1 rounded-md bg-neutral-900 text-white text-xs" onClick={() => setIdx((i) => Math.min(steps.length - 1, i + 1))}>Next</button>
+            ) : (
+              <button className="px-3 py-1 rounded-md bg-neutral-900 text-white text-xs" onClick={onClose}>Done</button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FlowDemo({ autoStart = false, onFinished }: { autoStart?: boolean; onFinished?: () => void }) {
   const steps = [
     { key: "connect", label: "Connection" },
     { key: "agent", label: "Agent" },
@@ -455,12 +532,15 @@ function FlowDemo() {
   const [agentProgress, setAgentProgress] = useState<number>(0);
   const [agentLog, setAgentLog] = useState<string[]>([]);
   const [agentDone, setAgentDone] = useState<boolean>(false);
+  const [tourOpen, setTourOpen] = useState<boolean>(false);
+  const [autoPilotRan, setAutoPilotRan] = useState<boolean>(false);
 
   // business data (unchanged)
   const segments = useMemo<Segment[]>(
     () => [
       { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 120, estReact: 0.09 },
       { id: "vip", title: "VIP frequent", size: 42, estReact: 0.12 },
+      { id: "new-customers", title: "New customers (0–7 days)", size: 85, estReact: 0.15 },
       { id: "low-value", title: "Low spenders", size: 220, estReact: 0.03 },
     ],
     []
@@ -485,6 +565,13 @@ function FlowDemo() {
     foodics: false,
   });
   const toggleConn = (k: string) => setConnections((c) => ({ ...c, [k]: !c[k] }));
+
+  // Onboarding tour anchors
+  const anchorAudience = useRef<HTMLDivElement>(null);
+  const anchorOffer = useRef<HTMLDivElement>(null);
+  const anchorGuardrails = useRef<HTMLDivElement>(null);
+  const anchorApprove = useRef<HTMLButtonElement>(null);
+  const anchorOpenStep = useRef<HTMLButtonElement>(null);
 
   function openStep(i: number) {
     const idx = Math.max(0, Math.min(steps.length - 1, i));
@@ -516,6 +603,28 @@ function FlowDemo() {
       setModalOpen(true);
     } catch {/* noop */}
   }
+
+  // Auto-start the modal flow when requested
+  useEffect(() => {
+    if (autoStart) {
+      openStep(0);
+      track("flow_autostart");
+    }
+  }, [autoStart]);
+
+  
+
+  // After scheduling, navigate back to Dashboard automatically
+  useEffect(() => {
+    if (done) {
+      track("flow_finished_to_dashboard");
+      const t = setTimeout(() => {
+        setModalOpen(false);
+        onFinished?.();
+      }, 1000);
+      return () => clearTimeout(t);
+    }
+  }, [done, onFinished]);
 
   // Start the agent run manually from the Agent step
   const startAgentMission = useCallback(async () => {
@@ -549,16 +658,50 @@ function FlowDemo() {
     }
   }, [agentRunning, segments, offers]);
 
+  // If autoStart, guide through steps automatically (Connection → Agent → Review → Approve)
+  useEffect(() => {
+    if (!autoStart || !modalOpen || autoPilotRan) return;
+    let cancelled = false;
+    setAutoPilotRan(true);
+    (async () => {
+      try {
+        await wait(600);
+        if (cancelled) return;
+        openStep(1); // Agent
+        await wait(700);
+        if (cancelled) return;
+        startAgentMission();
+        await wait(1900); // allow agent sequence to finish
+        if (cancelled) return;
+        openStep(2); // Review
+        await wait(700);
+        if (cancelled) return;
+        approveAndSend();
+      } catch {
+        // ignore
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [autoStart, modalOpen, autoPilotRan, startAgentMission]);
+
   return (
     <section id="flow" className="rounded-2xl border border-neutral-200 p-6 bg-neutral-50">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h3 className="text-xl font-semibold tracking-tight">Playbooks</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-xl font-semibold tracking-tight">Playbooks</h3>
+            <span className="px-2 py-0.5 rounded-full text-[11px] bg-neutral-900 text-white">Onboarding</span>
+          </div>
           <p className="text-sm text-neutral-500 mt-1">Connection → Agent → Review.</p>
         </div>
-        <button onClick={() => openStep(active)} className="px-3 py-2 rounded-md bg-neutral-900 text-white text-sm">
-          Open step
-        </button>
+        <div className="flex items-center gap-2">
+          <button ref={anchorOpenStep} onClick={() => openStep(active)} className="px-3 py-2 rounded-md bg-neutral-900 text-white text-sm">
+            Open step
+          </button>
+          <button onClick={() => { setTourOpen(true); track('flow_onboarding_tour_open'); }} className="px-3 py-2 rounded-md border border-neutral-200 text-sm hover:bg-neutral-50">
+            Start Onboarding Tour
+          </button>
+        </div>
       </div>
 
       {/* surface preview */}
@@ -570,7 +713,7 @@ function FlowDemo() {
 
       <div className="rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200/70 p-5">
         <div className="grid md:grid-cols-2 gap-6">
-          <div>
+          <div ref={anchorAudience}>
             <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-2">Audience</div>
             <RadioList
               items={segments.map((s) => ({ id: s.id as string, title: s.title, meta: `${s.size} guests` }))}
@@ -578,7 +721,7 @@ function FlowDemo() {
               onChange={setSelectedSegment}
             />
           </div>
-          <div>
+          <div ref={anchorOffer}>
             <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-2">Offer</div>
             <RadioList
               items={offers.map((o) => ({ id: o.id as string, title: o.title }))}
@@ -589,8 +732,8 @@ function FlowDemo() {
         </div>
 
         <div className="mt-6 flex items-center justify-between">
-          <div className="text-xs text-neutral-500">Guardrails: margin ≤ 6% • brand-safe copy</div>
-          <button onClick={approveAndSend} className="bg-neutral-900 text-white rounded-md px-4 py-2 text-sm">
+          <div ref={anchorGuardrails} className="text-xs text-neutral-500">Guardrails: margin ≤ 6% • brand-safe copy</div>
+          <button ref={anchorApprove} onClick={approveAndSend} className="bg-neutral-900 text-white rounded-md px-4 py-2 text-sm">
             Approve & Schedule
           </button>
         </div>
@@ -824,6 +967,25 @@ function FlowDemo() {
           </div>
         )}
       </WizardModal>
+
+      <FlowTourOverlay
+        open={tourOpen}
+        onClose={() => setTourOpen(false)}
+        steps={[
+          { key: 'open', title: 'Open the full flow', body: 'Jump into Connection → Agent → Review to see each step in context.' },
+          { key: 'audience', title: 'Pick your audience', body: 'Choose who to target. For onboarding, use “New customers (0–7 days)” to drive first orders.' },
+          { key: 'offer', title: 'Select an offer', body: 'Use a margin‑safe incentive the agent will optimize for lift and guardrails.' },
+          { key: 'guardrails', title: 'Built‑in guardrails', body: 'Safety caps margin impact ≤ 6% and enforces brand‑safe copy.' },
+          { key: 'approve', title: 'Approve & schedule', body: 'Confirm to simulate impact and add it to your Impact dashboard.' },
+        ]}
+        anchors={{
+          open: anchorOpenStep as React.RefObject<HTMLElement>,
+          audience: anchorAudience as React.RefObject<HTMLElement>,
+          offer: anchorOffer as React.RefObject<HTMLElement>,
+          guardrails: anchorGuardrails as React.RefObject<HTMLElement>,
+          approve: anchorApprove as React.RefObject<HTMLElement>,
+        }}
+      />
     </section>
   );
 }
@@ -836,6 +998,7 @@ export default function InteractiveDemoPage() {
   const [screen, setScreen] = useState<"agent" | "flow" | "dashboard">("flow");
   const [mode, setMode] = useState<"simple"  | "autonomous" | "pro">("autonomous");
   const [welcomeOpen, setWelcomeOpen] = useState<boolean>(true);
+  const [autoStartFlow, setAutoStartFlow] = useState<boolean>(false);
 
   useEffect(() => { track("page_view", { page: "vertical_ai_agent_ops_copilot" }); runTestsOnce(); }, []);
   return (
@@ -849,7 +1012,13 @@ export default function InteractiveDemoPage() {
           {screen === "agent" && <ModeToggle mode={mode} onChange={setMode} />}
           <main className="mt-6 space-y-8">
             {screen === "dashboard" && <LiveDashboard />}
-            {screen === "flow" && <FlowDemo key="flow" />}
+            {screen === "flow" && (
+              <FlowDemo
+                key="flow"
+                autoStart={autoStartFlow}
+                onFinished={() => setScreen("dashboard")}
+              />
+            )}
             {screen === "agent" && (mode === "simple" ?  <OpsCopilotSimple /> : (mode === "autonomous") ? <AutonomousOpsAgent /> : <OpsCopilot />)}
           </main>
         </div>
@@ -878,15 +1047,16 @@ export default function InteractiveDemoPage() {
                 <div className="text-sm text-white/80">Autonomously re-engages customers and builds lasting relationships that drive predictable revenue growth.</div>
               </div>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span className="px-2 py-1 rounded-full bg-white/10 text-white text-xs">Retention</span>
-              <span className="px-2 py-1 rounded-full bg-white/10 text-white text-xs">Re‑engagement</span>
-              <span className="px-2 py-1 rounded-full bg-white/10 text-white text-xs">Promotions</span>
-            </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="px-2 py-1 rounded-full bg-white/10 text-white text-xs">Retention</span>
+            <span className="px-2 py-1 rounded-full bg-white/10 text-white text-xs">Re‑engagement</span>
+            <span className="px-2 py-1 rounded-full bg-white/10 text-white text-xs">Promotions</span>
+            <span className="px-2 py-1 rounded-full bg-white/10 text-white text-xs">Onboarding</span>
           </div>
+        </div>
 
-          {/* Body */}
-          <div className="p-5 bg-white grid grid-cols-12 gap-6">
+        {/* Body */}
+        <div className="p-5 bg-white grid grid-cols-12 gap-6">
             <div className="col-span-12 md:col-span-7 space-y-4 text-sm">
               <div>
                 <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">Value proposition</div>
@@ -923,6 +1093,23 @@ export default function InteractiveDemoPage() {
                 <div className="aspect-video rounded-md overflow-hidden bg-neutral-200">
                   <img src={introGif} alt="Demo intro" className="h-full w-full object-cover" />
                 </div>
+                <div className="mt-3 p-3 rounded-xl border border-neutral-200 bg-white">
+                  <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">Showcase</div>
+                  <div className="font-medium">New Customer Onboarding</div>
+                  <ul className="list-disc pl-5 mt-1 text-sm text-neutral-700 space-y-1">
+                    <li>Welcome new guests with a gentle intro</li>
+                    <li>Nudge a first order within 7 days</li>
+                    <li>Track activation and early retention</li>
+                  </ul>
+                  <div className="mt-2">
+                    <button
+                      onClick={() => { setWelcomeOpen(false); setScreen('flow'); setAutoStartFlow(true); track('welcome_showcase_onboarding'); }}
+                      className="px-3 py-2 rounded-md bg-neutral-900 text-white text-xs"
+                    >
+                      Explore in demo
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -936,7 +1123,7 @@ export default function InteractiveDemoPage() {
                   Skip
                 </button>
                 <button
-                  onClick={() => { setWelcomeOpen(false); setScreen('flow'); track('welcome_start_demo'); }}
+                  onClick={() => { setWelcomeOpen(false); setScreen('flow'); setAutoStartFlow(true); track('welcome_start_demo'); }}
                   className="px-3 py-2 rounded-md bg-neutral-900 text-white text-sm"
                 >
                   Start Demo
@@ -1145,6 +1332,7 @@ function OpsCopilot() {
   const segments = useMemo<Segment[]>(() => [
     { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 120, estReact: 0.09 },
     { id: "vip", title: "VIP frequent", size: 42, estReact: 0.12 },
+    { id: "new-customers", title: "New customers (0–7 days)", size: 85, estReact: 0.15 },
     { id: "low-value", title: "Low spenders", size: 220, estReact: 0.03 },
   ], []);
   const offers = useMemo<Offer[]>(() => [
@@ -1479,6 +1667,7 @@ function OpsCopilotSimple() {
   const segments = useMemo<Segment[]>(() => [
     { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 120, estReact: 0.09 },
     { id: "vip", title: "VIP frequent", size: 42, estReact: 0.12 },
+    { id: "new-customers", title: "New customers (0–7 days)", size: 85, estReact: 0.15 },
     { id: "low-value", title: "Low spenders", size: 220, estReact: 0.03 },
   ], []);
   const offers = useMemo<Offer[]>(() => [
@@ -1720,6 +1909,7 @@ function AutonomousOpsAgent() {
   const segments = useMemo<Segment[]>(() => [
     { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 120, estReact: 0.09 },
     { id: "vip",           title: "VIP frequent",        size: 42,  estReact: 0.12 },
+    { id: "new-customers", title: "New customers (0–7 days)", size: 85, estReact: 0.15 },
     { id: "low-value",     title: "Low spenders",        size: 220, estReact: 0.03 },
   ], []);
   const offers = useMemo<Offer[]>(() => [

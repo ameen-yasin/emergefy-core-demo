@@ -11,7 +11,7 @@ import React, {
 
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
-import introGif from "./assets/Intro gif.gif";
+import introGif from "./assets/play.gif";
 
 const IconX = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" className="stroke-current">
@@ -65,6 +65,12 @@ const IconEye = ({ size = 14 }: { size?: number }) => (
 const IconEyeOff = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" className="stroke-current">
     <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.77 21.77 0 0 1 5.06-5.94M1 1l22 22" fill="none" strokeWidth="2" />
+  </svg>
+);
+const IconCheckCircle = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" className="stroke-current">
+    <circle cx="12" cy="12" r="10" fill="none" strokeWidth="2" />
+    <path d="M8 12l3 3 5-6" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 // const IconBot = ({ size = 18 }: { size?: number }) => (
@@ -443,11 +449,17 @@ function FlowTourOverlay({
   onClose,
   steps,
   anchors,
+  onNext,
+  onPrev,
+  activeKey,
 }: {
   open: boolean;
   onClose: () => void;
   steps: { key: string; title: string; body: string }[];
   anchors: Record<string, React.RefObject<HTMLElement>>;
+  onNext?: (currentKey: string, nextKey: string | 'done') => void;
+  onPrev?: (currentKey: string, prevKey: string | 'none') => void;
+  activeKey?: string;
 }) {
   const [idx, setIdx] = useState(0);
   const [rect, setRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
@@ -472,14 +484,21 @@ function FlowTourOverlay({
     };
   }, [open, idx, anchors, steps]);
 
+  // Sync to specific external step if provided (one-shot guidance)
+  useEffect(() => {
+    if (!open || !activeKey) return;
+    const i = steps.findIndex((s) => s.key === activeKey);
+    if (i >= 0 && i !== idx) setIdx(i);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, activeKey, steps]);
+
   if (!open) return null;
   const step = steps[idx];
   const calloutLeft = rect ? Math.min(Math.max(rect.left + rect.width + 12, 12), window.innerWidth - 320 - 12) : 24;
   const calloutTop = rect ? Math.min(Math.max(rect.top, 12), window.innerHeight - 160) : 24;
 
   return (
-    <div className="fixed inset-0 z-[60]">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+    <div className="fixed inset-0 z-[60] pointer-events-none">
       {/* highlight box */}
       {rect && (
         <div
@@ -489,22 +508,56 @@ function FlowTourOverlay({
       )}
       {/* callout */}
       <div
-        className="fixed w-[320px] rounded-xl bg-white border border-neutral-200 shadow-lg p-3 text-sm"
+        className="fixed w-[320px] rounded-xl bg-white border border-neutral-200 shadow-lg p-3 text-sm pointer-events-auto"
         style={{ top: calloutTop, left: calloutLeft }}
       >
         <div className="text-[11px] uppercase tracking-wide text-neutral-500">Onboarding</div>
         <div className="font-semibold mt-0.5">{step?.title}</div>
         <div className="text-neutral-700 mt-1">{step?.body}</div>
         <div className="mt-2 flex items-center justify-between">
-          <button className="px-2 py-1 rounded-md border border-neutral-200 text-xs" onClick={() => setIdx((i) => Math.max(0, i - 1))} disabled={idx === 0}>
+          <button
+            className="px-2 py-1 rounded-md border border-neutral-200 text-xs"
+            onClick={() => {
+              if (idx === 0) return;
+              const curr = steps[idx]?.key;
+              const prevIdx = Math.max(0, idx - 1);
+              const prev = steps[prevIdx]?.key ?? 'none';
+              onPrev?.(curr, prev);
+              const target = prevIdx;
+              // Slight delay if parent changes modal step so anchors mount
+              setTimeout(() => setIdx(target), 200);
+            }}
+            disabled={idx === 0}
+          >
             Back
           </button>
           <div className="flex items-center gap-2">
             <div className="text-[11px] text-neutral-500">{idx + 1} / {steps.length}</div>
             {idx < steps.length - 1 ? (
-              <button className="px-3 py-1 rounded-md bg-neutral-900 text-white text-xs" onClick={() => setIdx((i) => Math.min(steps.length - 1, i + 1))}>Next</button>
+              <button
+                className="px-3 py-1 rounded-md bg-neutral-900 text-white text-xs"
+                onClick={() => {
+                  const curr = steps[idx]?.key;
+                  const nextIdx = Math.min(steps.length - 1, idx + 1);
+                  const next = steps[nextIdx]?.key;
+                  onNext?.(curr, next);
+                  const target = nextIdx;
+                  setTimeout(() => setIdx(target), 200);
+                }}
+              >
+                Next
+              </button>
             ) : (
-              <button className="px-3 py-1 rounded-md bg-neutral-900 text-white text-xs" onClick={onClose}>Done</button>
+              <button
+                className="px-3 py-1 rounded-md bg-neutral-900 text-white text-xs"
+                onClick={() => {
+                  const curr = steps[idx]?.key;
+                  onNext?.(curr, 'done');
+                  onClose();
+                }}
+              >
+                Done
+              </button>
             )}
           </div>
         </div>
@@ -513,7 +566,17 @@ function FlowTourOverlay({
   );
 }
 
-function FlowDemo({ autoStart = false, onFinished }: { autoStart?: boolean; onFinished?: () => void }) {
+function FlowDemo({
+  autoStart = false,
+  autoStartTour = false,
+  onFinished,
+  onAutostartTourConsumed,
+}: {
+  autoStart?: boolean;
+  autoStartTour?: boolean;
+  onFinished?: () => void;
+  onAutostartTourConsumed?: () => void;
+}) {
   const steps = [
     { key: "connect", label: "Connection" },
     { key: "agent", label: "Agent" },
@@ -533,7 +596,7 @@ function FlowDemo({ autoStart = false, onFinished }: { autoStart?: boolean; onFi
   const [agentLog, setAgentLog] = useState<string[]>([]);
   const [agentDone, setAgentDone] = useState<boolean>(false);
   const [tourOpen, setTourOpen] = useState<boolean>(false);
-  const [autoPilotRan, setAutoPilotRan] = useState<boolean>(false);
+  const [tourActiveKey, setTourActiveKey] = useState<string | null>(null);
 
   // business data (unchanged)
   const segments = useMemo<Segment[]>(
@@ -572,6 +635,16 @@ function FlowDemo({ autoStart = false, onFinished }: { autoStart?: boolean; onFi
   const anchorGuardrails = useRef<HTMLDivElement>(null);
   const anchorApprove = useRef<HTMLButtonElement>(null);
   const anchorOpenStep = useRef<HTMLButtonElement>(null);
+  // Modal (popup) anchors
+  const anchorModalConnect = useRef<HTMLDivElement>(null);
+  const anchorModalAgentStart = useRef<HTMLButtonElement>(null);
+  const anchorModalReview = useRef<HTMLDivElement>(null);
+  const anchorModalFooterNext = useRef<HTMLButtonElement>(null);
+  const anchorModalConnectChoose = useRef<HTMLDivElement>(null);
+  const anchorModalConnectFile = useRef<HTMLDivElement>(null);
+  const anchorModalConnectWorksheet = useRef<HTMLDivElement>(null);
+  const anchorModalConnectAlso = useRef<HTMLDivElement>(null);
+  const anchorModalAgentActivity = useRef<HTMLDivElement>(null);
 
   function openStep(i: number) {
     const idx = Math.max(0, Math.min(steps.length - 1, i));
@@ -609,22 +682,34 @@ function FlowDemo({ autoStart = false, onFinished }: { autoStart?: boolean; onFi
     if (autoStart) {
       openStep(0);
       track("flow_autostart");
+      if (autoStartTour) {
+        setTourOpen(true);
+        setTourActiveKey("connectChoose");
+        setTimeout(() => setTourActiveKey(null), 400);
+        onAutostartTourConsumed?.();
+      }
     }
-  }, [autoStart]);
+  }, [autoStart, autoStartTour, onAutostartTourConsumed]);
 
   
 
-  // After scheduling, navigate back to Dashboard automatically
+  // When the journey finishes, stay on the confirmation screen
   useEffect(() => {
     if (done) {
-      track("flow_finished_to_dashboard");
-      const t = setTimeout(() => {
-        setModalOpen(false);
-        onFinished?.();
-      }, 1000);
-      return () => clearTimeout(t);
+      track("flow_finished_confirmation");
+      setTourOpen(false);
     }
-  }, [done, onFinished]);
+  }, [done]);
+
+  const handleCloseAfterDone = () => {
+    setModalOpen(false);
+    onFinished?.();
+  };
+
+  const handlePlanAnother = () => {
+    setDone(null);
+    openStep(0);
+  };
 
   // Start the agent run manually from the Agent step
   const startAgentMission = useCallback(async () => {
@@ -658,31 +743,7 @@ function FlowDemo({ autoStart = false, onFinished }: { autoStart?: boolean; onFi
     }
   }, [agentRunning, segments, offers]);
 
-  // If autoStart, guide through steps automatically (Connection → Agent → Review → Approve)
-  useEffect(() => {
-    if (!autoStart || !modalOpen || autoPilotRan) return;
-    let cancelled = false;
-    setAutoPilotRan(true);
-    (async () => {
-      try {
-        await wait(600);
-        if (cancelled) return;
-        openStep(1); // Agent
-        await wait(700);
-        if (cancelled) return;
-        startAgentMission();
-        await wait(1900); // allow agent sequence to finish
-        if (cancelled) return;
-        openStep(2); // Review
-        await wait(700);
-        if (cancelled) return;
-        approveAndSend();
-      } catch {
-        // ignore
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [autoStart, modalOpen, autoPilotRan, startAgentMission]);
+  // Manual progression via tour; no autopilot
 
   return (
     <section id="flow" className="rounded-2xl border border-neutral-200 p-6 bg-neutral-50">
@@ -695,10 +756,26 @@ function FlowDemo({ autoStart = false, onFinished }: { autoStart?: boolean; onFi
           <p className="text-sm text-neutral-500 mt-1">Connection → Agent → Review.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button ref={anchorOpenStep} onClick={() => openStep(active)} className="px-3 py-2 rounded-md bg-neutral-900 text-white text-sm">
+          <button
+            ref={anchorOpenStep}
+            onClick={() => {
+              openStep(active);
+              track('flow_open_step_with_tour');
+            }}
+            className="px-3 py-2 rounded-md bg-neutral-900 text-white text-sm"
+          >
             Open step
           </button>
-          <button onClick={() => { setTourOpen(true); track('flow_onboarding_tour_open'); }} className="px-3 py-2 rounded-md border border-neutral-200 text-sm hover:bg-neutral-50">
+          <button
+            onClick={() => {
+              openStep(0);
+              setTourOpen(true);
+              setTourActiveKey('connectChoose');
+              setTimeout(() => setTourActiveKey(null), 400);
+              track('flow_onboarding_tour_open');
+            }}
+            className="px-3 py-2 rounded-md border border-neutral-200 text-sm hover:bg-neutral-50"
+          >
             Start Onboarding Tour
           </button>
         </div>
@@ -758,6 +835,7 @@ function FlowDemo({ autoStart = false, onFinished }: { autoStart?: boolean; onFi
                   Back
                 </button>
                 <button
+                  ref={anchorModalFooterNext}
                   onClick={modalStep < steps.length - 1 ? nextStep : approveAndSend}
                   disabled={modalStep < steps.length - 1 && steps[modalStep].key === "agent" && !agentStarted}
                   className={`px-3 py-2 rounded-md text-sm ${
@@ -779,7 +857,7 @@ function FlowDemo({ autoStart = false, onFinished }: { autoStart?: boolean; onFi
           <>
             {/* 1) CONNECT — two column (left info, right form) */}
             {steps[modalStep].key === "connect" && (
-              <div className="grid grid-cols-12 gap-6">
+              <div ref={anchorModalConnect} className="grid grid-cols-12 gap-6">
                 <aside className="col-span-12 md:col-span-5 lg:col-span-4">
                   <div className="rounded-xl border border-neutral-200 p-4">
                     <div className="flex items-center gap-3">
@@ -819,6 +897,7 @@ function FlowDemo({ autoStart = false, onFinished }: { autoStart?: boolean; onFi
 
                 <div className="col-span-12 md:col-span-7 lg:col-span-8">
                   <div className="space-y-5">
+                    <div ref={anchorModalConnectChoose}>
                     <FieldShell
                       label="1. Choose a connection"
                       hint="Authenticate with your Google Sheets account."
@@ -836,7 +915,9 @@ function FlowDemo({ autoStart = false, onFinished }: { autoStart?: boolean; onFi
                         </div>
                       </div>
                     </FieldShell>
+                    </div>
 
+                    <div ref={anchorModalConnectFile}>
                     <FieldShell label="2. Select your file" hint="Select a Google Sheet or paste a shared URL">
                       <InputLike placeholder="Select a Google Sheet" />
                       <div className="mt-2">
@@ -846,12 +927,15 @@ function FlowDemo({ autoStart = false, onFinished }: { autoStart?: boolean; onFi
                         </div>
                       </div>
                     </FieldShell>
+                    </div>
 
+                    <div ref={anchorModalConnectWorksheet}>
                     <FieldShell label="3. Select a worksheet from your file">
                       <InputLike placeholder="Select a file to preview its worksheets" />
                     </FieldShell>
+                    </div>
 
-                    <div className="pt-3 border-t">
+                    <div ref={anchorModalConnectAlso} className="pt-3 border-t">
                       <div className="text-xs font-medium text-neutral-700 mb-2">Also connect (optional)</div>
                       <div className="flex flex-wrap gap-2">
                         <CheckboxPill label="Upload CSV" on={!!connections.csv} onToggle={() => toggleConn("csv")} />
@@ -884,18 +968,30 @@ function FlowDemo({ autoStart = false, onFinished }: { autoStart?: boolean; onFi
                       <div className="text-xs text-neutral-500">Autonomously re-engages customers and builds lasting relationships that drive predictable revenue growth.</div>
                     </div>
                   </div>
-                  <button onClick={startAgentMission} disabled={agentRunning} className={`px-3 py-2 rounded-md text-sm ${agentRunning ? "border border-neutral-200 text-neutral-500" : "bg-neutral-900 text-white"}`}>
+                  <button
+                    ref={anchorModalAgentStart}
+                    onClick={() => {
+                      if (!agentRunning && tourOpen) {
+                        setTourActiveKey('agentActivity');
+                        setTimeout(() => setTourActiveKey(null), 400);
+                      }
+                      startAgentMission();
+                    }}
+                    disabled={agentRunning}
+                    className={`px-3 py-2 rounded-md text-sm ${agentRunning ? "border border-neutral-200 text-neutral-500" : "bg-neutral-900 text-white"}`}
+                  >
                     {agentRunning ? "Running…" : "Start Mission"}
                   </button>
                 </div>
 
-                <EnergyBar progress={agentProgress} />
-                <div className="rounded-2xl border border-neutral-200 bg-white p-3">
-                  <div className="text-xs text-neutral-500 mb-1">Agent Log</div>
-                  {agentLog.length === 0 ? (
-                    <div className="text-sm text-neutral-500">Press Start Mission to let the agent choose audience, offer, and scheduling.</div>
-                  ) : (
-                    <ul className="space-y-1">
+                <div ref={anchorModalAgentActivity} className="space-y-3">
+                  <EnergyBar progress={agentProgress} />
+                  <div className="rounded-2xl border border-neutral-200 bg-white p-3">
+                    <div className="text-xs text-neutral-500 mb-1">Agent Log</div>
+                    {agentLog.length === 0 ? (
+                      <div className="text-sm text-neutral-500">Press Start Mission to let the agent choose audience, offer, and scheduling.</div>
+                    ) : (
+                      <ul className="space-y-1">
                       {agentLog.map((t, i) => (
                         <li key={`${t}-${i}`} className="flex items-start gap-2 p-2 rounded-lg hover:bg-neutral-50">
                           <span className="h-5 w-5 rounded-full border border-neutral-400 grid place-items-center">
@@ -906,6 +1002,7 @@ function FlowDemo({ autoStart = false, onFinished }: { autoStart?: boolean; onFi
                       ))}
                     </ul>
                   )}
+                </div>
                 </div>
 
 
@@ -944,38 +1041,154 @@ function FlowDemo({ autoStart = false, onFinished }: { autoStart?: boolean; onFi
             {/* 5) REVIEW */}
             {steps[modalStep].key === "measure" && (
               <div className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-3">
-                  <MinimalStat k="Segment" v={seg.title} />
-                  <MinimalStat k="Offer" v={off.title} />
-                  <MinimalStat k="Est. Reactivations" v={reactivated} />
-                  <MinimalStat k="Projected Sales" v={`$${revenue}`} />
+                <div ref={anchorModalReview} className="rounded-2xl border border-neutral-200 bg-gradient-to-br from-white via-neutral-50 to-white p-5 shadow-sm">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                      <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                        <svg width="16" height="16" viewBox="0 0 24 24" className="text-emerald-600"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>
+                        Ready to schedule
+                      </div>
+                      <h4 className="mt-3 text-lg font-semibold">Review impact before you approve</h4>
+                      <p className="mt-1 text-sm text-neutral-600">Confirm the audience, offer, and projected lift. We’ll send this to the guardrailed agent for execution.</p>
+                    </div>
+                    <div className="rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm">
+                      <div className="font-semibold text-neutral-800">Launch window</div>
+                      <div className="mt-1 text-neutral-600">{scheduling.when} • {scheduling.channel}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    <div className="rounded-xl border border-neutral-200 bg-white p-3">
+                      <div className="text-[11px] uppercase tracking-wide text-neutral-500">Audience</div>
+                      <div className="mt-1 font-semibold text-neutral-900">{seg.title}</div>
+                      <div className="mt-1 text-xs text-neutral-500">{seg.size.toLocaleString()} guests</div>
+                    </div>
+                    <div className="rounded-xl border border-neutral-200 bg-white p-3">
+                      <div className="text-[11px] uppercase tracking-wide text-neutral-500">Offer</div>
+                      <div className="mt-1 font-semibold text-neutral-900">{off.title}</div>
+                      <div className="mt-1 text-xs text-neutral-500">Margin impact {off.marginImpact}% • Est. lift {Math.round(off.estLift * 100)}%</div>
+                    </div>
+                    <div className="rounded-xl border border-neutral-200 bg-white p-3">
+                      <div className="text-[11px] uppercase tracking-wide text-neutral-500">Agent confidence</div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="font-semibold text-neutral-900">High</span>
+                        <span className="h-2 w-16 rounded-full bg-emerald-500/20">
+                          <span className="block h-2 w-12 rounded-full bg-emerald-500" />
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-neutral-500">Guardrails satisfied</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                      <div className="text-xs font-medium text-neutral-500">Estimated reactivations</div>
+                      <div className="mt-1 text-2xl font-semibold tabular-nums">{reactivated}</div>
+                      <p className="mt-2 text-sm text-neutral-600">Based on recent performance for similar audiences.
+                      </p>
+                      <div className="mt-3 h-2 rounded-full bg-neutral-100">
+                        <div className="h-2 rounded-full bg-neutral-900" style={{ width: `${Math.min(100, (reactivated / Math.max(1, seg.size)) * 100)}%` }} />
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                      <div className="text-xs font-medium text-neutral-500">Projected sales impact</div>
+                      <div className="mt-1 text-2xl font-semibold tabular-nums">${revenue.toLocaleString()}</div>
+                      <p className="mt-2 text-sm text-neutral-600">Includes expected return orders within the next 14 days.</p>
+                      <ul className="mt-3 space-y-1 text-xs text-neutral-500">
+                        <li>• Baseline uplift {Math.round(off.estLift * 100)}% over control</li>
+                        <li>• Margin guardrail at {Math.abs(off.marginImpact)}%</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-xl border border-neutral-200 bg-white p-4">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-medium text-neutral-500">Safety checks</div>
+                        <div className="mt-1 text-sm text-neutral-600">Margin ≤ 6%, channel opt-in verified, content scored brand-safe.</div>
+                      </div>
+                      <div className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs text-neutral-600">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" /> Within guardrails
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-xs text-neutral-500">Approve to schedule and track results on the Impact page.</div>
+                <div className="text-xs text-neutral-500">Approve to schedule and track results on the Impact dashboard.</div>
               </div>
             )}
           </>
         ) : (
-          <div className="space-y-3 text-sm">
-            <div className="font-semibold text-base">Campaign scheduled</div>
-            <div className="text-neutral-600">
-              {done.offer} to {done.segment} via {done.channel} — {done.when}.
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5">
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-emerald-600">
+                  <IconCheckCircle />
+                </span>
+                <div className="space-y-1">
+                  <div className="text-sm font-semibold text-emerald-700">Campaign scheduled</div>
+                  <div className="text-sm text-neutral-700">
+                    {done.offer} to {done.segment} via {done.channel} — {done.when}.
+                  </div>
+                  <div className="text-xs text-neutral-500">Tracking will appear on the Impact dashboard within a few minutes.</div>
+                </div>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <MinimalStat k="Audience" v={done.audience} />
-              <MinimalStat k="Reactivations (est.)" v={done.reactivated} />
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                <div className="text-[11px] uppercase tracking-wide text-neutral-500">Audience</div>
+                <div className="mt-1 text-lg font-semibold text-neutral-900">{done.segment}</div>
+                <div className="mt-1 text-xs text-neutral-500">{done.audience.toLocaleString()} guests</div>
+              </div>
+              <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                <div className="text-[11px] uppercase tracking-wide text-neutral-500">Offer</div>
+                <div className="mt-1 text-lg font-semibold text-neutral-900">{done.offer}</div>
+                <div className="mt-1 text-xs text-neutral-500">Scheduled on {done.channel} • {done.when}</div>
+              </div>
+              <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                <div className="text-[11px] uppercase tracking-wide text-neutral-500">Estimated lift</div>
+                <div className="mt-1 text-lg font-semibold text-neutral-900">{done.reactivated} reactivations</div>
+                <div className="mt-1 text-xs text-neutral-500">≈ ${done.revenue.toLocaleString()} in projected sales</div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-2xl border border-neutral-200 bg-white p-4 text-sm text-neutral-600">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
+                  <IconCheckCircle size={14} />
+                </span>
+                Safety checks passed: margin guardrail, channel consent, brand-safe copy.
+              </div>
+              <div className="text-xs text-neutral-500">Need edits? Close and run another playbook with updated settings.</div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleCloseAfterDone}
+                className="inline-flex items-center gap-2 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white"
+              >
+                Go to Impact Dashboard
+              </button>
+              <button
+                onClick={handlePlanAnother}
+                className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50"
+              >
+                Plan another playbook
+              </button>
             </div>
           </div>
         )}
       </WizardModal>
 
+      {/* Page-level tour (reserved for later) */}
       <FlowTourOverlay
-        open={tourOpen}
+        open={false}
         onClose={() => setTourOpen(false)}
         steps={[
           { key: 'open', title: 'Open the full flow', body: 'Jump into Connection → Agent → Review to see each step in context.' },
           { key: 'audience', title: 'Pick your audience', body: 'Choose who to target. For onboarding, use “New customers (0–7 days)” to drive first orders.' },
           { key: 'offer', title: 'Select an offer', body: 'Use a margin‑safe incentive the agent will optimize for lift and guardrails.' },
-          { key: 'guardrails', title: 'Built‑in guardrails', body: 'Safety caps margin impact ≤ 6% and enforces brand‑safe copy.' },
+          { key: 'guardrails', title: 'Built‑in guardrails', body: 'Safety caps margin impact ≤ 6% and enforces brand-safe copy.' },
           { key: 'approve', title: 'Approve & schedule', body: 'Confirm to simulate impact and add it to your Impact dashboard.' },
         ]}
         anchors={{
@@ -984,6 +1197,62 @@ function FlowDemo({ autoStart = false, onFinished }: { autoStart?: boolean; onFi
           offer: anchorOffer as React.RefObject<HTMLElement>,
           guardrails: anchorGuardrails as React.RefObject<HTMLElement>,
           approve: anchorApprove as React.RefObject<HTMLElement>,
+        }}
+      />
+
+      {/* Modal-level tour (explains each popup step) */}
+      <FlowTourOverlay
+        open={tourOpen && modalOpen}
+        onClose={() => setTourOpen(false)}
+        activeKey={tourActiveKey ?? undefined}
+        steps={[
+          { key: 'connectChoose',   title: 'Choose a connection',  body: 'Authenticate and select a source account for the demo.' },
+          { key: 'connectFile',     title: 'Pick your file',       body: 'Select a Google Sheet or paste a shared URL to preview.' },
+          { key: 'connectWorksheet',title: 'Select a worksheet',   body: 'Choose which tab to use; sample data is used in the demo.' },
+          { key: 'connectAlso',     title: 'Optional connections', body: 'You can also toggle CSV, POS, and other connectors.' },
+          { key: 'agentStart',      title: 'Let the agent propose',body: 'Start the mission. The agent picks audience, offer, and timing.' },
+          { key: 'agentActivity',   title: 'Progress & log',       body: 'Watch progress and see decisions logged in real time under guardrails.' },
+          { key: 'review',          title: 'Review the impact',    body: 'Check estimated reactivations and projected sales before scheduling.' },
+          { key: 'approve',         title: 'Finish — schedule it', body: 'Click Finish to schedule; you’ll return to the Dashboard to see results.' },
+        ]}
+        onNext={(curr, next) => {
+          if (!next || next === 'done') return;
+          // Start the agent when advancing from agentStart → agentActivity
+          if (curr === 'agentStart' && next === 'agentActivity') {
+            if (!agentRunning) {
+              setTourActiveKey('agentActivity');
+              setTimeout(() => setTourActiveKey(null), 400);
+              startAgentMission();
+            }
+            return;
+          }
+          // Move modal step forward when crossing section boundaries
+          if (curr.startsWith('connect') && next.startsWith('agent')) {
+            openStep(1);
+          } else if (curr === 'agentActivity' && next === 'review') {
+            openStep(2);
+          } else if (curr === 'review' && next === 'approve') {
+            openStep(2);
+          }
+        }}
+        onPrev={(curr, prev) => {
+          if (!prev || prev === 'none') return;
+          // Move modal step backward when crossing section boundaries
+          if ((curr === 'review' || curr === 'approve') && prev.startsWith('agent')) {
+            openStep(1);
+          } else if (curr.startsWith('agent') && prev.startsWith('connect')) {
+            openStep(0);
+          }
+        }}
+        anchors={{
+          connectChoose:    anchorModalConnectChoose as React.RefObject<HTMLElement>,
+          connectFile:      anchorModalConnectFile as React.RefObject<HTMLElement>,
+          connectWorksheet: anchorModalConnectWorksheet as React.RefObject<HTMLElement>,
+          connectAlso:      anchorModalConnectAlso as React.RefObject<HTMLElement>,
+          agentStart:       anchorModalAgentStart as React.RefObject<HTMLElement>,
+          agentActivity:    anchorModalAgentActivity as React.RefObject<HTMLElement>,
+          review:           anchorModalReview as React.RefObject<HTMLElement>,
+          approve:          anchorModalFooterNext as React.RefObject<HTMLElement>,
         }}
       />
     </section>
@@ -999,6 +1268,7 @@ export default function InteractiveDemoPage() {
   const [mode, setMode] = useState<"simple"  | "autonomous" | "pro">("autonomous");
   const [welcomeOpen, setWelcomeOpen] = useState<boolean>(true);
   const [autoStartFlow, setAutoStartFlow] = useState<boolean>(false);
+  const [autoStartTour, setAutoStartTour] = useState<boolean>(false);
 
   useEffect(() => { track("page_view", { page: "vertical_ai_agent_ops_copilot" }); runTestsOnce(); }, []);
   return (
@@ -1016,6 +1286,8 @@ export default function InteractiveDemoPage() {
               <FlowDemo
                 key="flow"
                 autoStart={autoStartFlow}
+                autoStartTour={autoStartTour}
+                onAutostartTourConsumed={() => setAutoStartTour(false)}
                 onFinished={() => setScreen("dashboard")}
               />
             )}
@@ -1101,14 +1373,14 @@ export default function InteractiveDemoPage() {
                     <li>Nudge a first order within 7 days</li>
                     <li>Track activation and early retention</li>
                   </ul>
-                  <div className="mt-2">
+                  {/* <div className="mt-2">
                     <button
                       onClick={() => { setWelcomeOpen(false); setScreen('flow'); setAutoStartFlow(true); track('welcome_showcase_onboarding'); }}
                       className="px-3 py-2 rounded-md bg-neutral-900 text-white text-xs"
                     >
                       Explore in demo
                     </button>
-                  </div>
+                  </div> */}
                 </div>
               </div>
             </div>
@@ -1117,13 +1389,23 @@ export default function InteractiveDemoPage() {
             <div className="col-span-12 flex items-center justify-end pt-2">
               <div className="space-x-2">
                 <button
-                  onClick={() => { setWelcomeOpen(false); track('welcome_skip'); }}
+                  onClick={() => {
+                    setWelcomeOpen(false);
+                    setAutoStartTour(false);
+                    track('welcome_skip');
+                  }}
                   className="px-3 py-2 rounded-md border border-neutral-200 text-sm"
                 >
                   Skip
                 </button>
                 <button
-                  onClick={() => { setWelcomeOpen(false); setScreen('flow'); setAutoStartFlow(true); track('welcome_start_demo'); }}
+                  onClick={() => {
+                    setWelcomeOpen(false);
+                    setScreen('flow');
+                    setAutoStartFlow(true);
+                    setAutoStartTour(true);
+                    track('welcome_start_demo');
+                  }}
                   className="px-3 py-2 rounded-md bg-neutral-900 text-white text-sm"
                 >
                   Start Demo

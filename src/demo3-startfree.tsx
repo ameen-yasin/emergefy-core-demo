@@ -620,11 +620,11 @@ function FlowDemo({
 
   // trimmed connections (your list)
   const [connections, setConnections] = useState<Record<string, boolean>>({
-    csv: true,
+    csv: false,
     gsheet: true,
     square: false,
     toast: false,
-    shopifypos: false,
+    shopify: true,
     foodics: false,
   });
   const toggleConn = (k: string) => setConnections((c) => ({ ...c, [k]: !c[k] }));
@@ -642,7 +642,7 @@ function FlowDemo({
   const anchorModalFooterNext = useRef<HTMLButtonElement>(null);
   const anchorModalConnectChoose = useRef<HTMLDivElement>(null);
   const anchorModalConnectFile = useRef<HTMLDivElement>(null);
-  const anchorModalConnectWorksheet = useRef<HTMLDivElement>(null);
+  // const anchorModalConnectWorksheet = useRef<HTMLDivElement>(null);
   const anchorModalConnectAlso = useRef<HTMLDivElement>(null);
   const anchorModalAgentActivity = useRef<HTMLDivElement>(null);
 
@@ -929,20 +929,20 @@ function FlowDemo({
                     </FieldShell>
                     </div>
 
-                    <div ref={anchorModalConnectWorksheet}>
+                    {/* <div ref={anchorModalConnectWorksheet}>
                     <FieldShell label="3. Select a worksheet from your file">
                       <InputLike placeholder="Select a file to preview its worksheets" />
                     </FieldShell>
-                    </div>
+                    </div> */}
 
                     <div ref={anchorModalConnectAlso} className="pt-3 border-t">
                       <div className="text-xs font-medium text-neutral-700 mb-2">Also connect (optional)</div>
                       <div className="flex flex-wrap gap-2">
                         <CheckboxPill label="Upload CSV" on={!!connections.csv} onToggle={() => toggleConn("csv")} />
                         <CheckboxPill label="Google Sheets" on={!!connections.gsheet} onToggle={() => toggleConn("gsheet")} />
-                        <CheckboxPill label="Square POS" on={!!connections.square} onToggle={() => toggleConn("square")} />
+                        <CheckboxPill label="Square" on={!!connections.square} onToggle={() => toggleConn("square")} />
                         <CheckboxPill label="Toast POS" on={!!connections.toast} onToggle={() => toggleConn("toast")} />
-                        <CheckboxPill label="Shopify POS" on={!!connections.shopifypos} onToggle={() => toggleConn("shopifypos")} />
+                        <CheckboxPill label="Shopify" on={!!connections.shopify} onToggle={() => toggleConn("shopify")} />
                         <CheckboxPill label="Foodics" on={!!connections.foodics} onToggle={() => toggleConn("foodics")} />
                       </div>
                       <div className="text-xs text-neutral-500 mt-2">Demo only — no external data transmitted.</div>
@@ -1208,7 +1208,7 @@ function FlowDemo({
         steps={[
           { key: 'connectChoose',   title: 'Choose a connection',  body: 'Authenticate and select a source account for the demo.' },
           { key: 'connectFile',     title: 'Pick your file',       body: 'Select a Google Sheet or paste a shared URL to preview.' },
-          { key: 'connectWorksheet',title: 'Select a worksheet',   body: 'Choose which tab to use; sample data is used in the demo.' },
+          // { key: 'connectWorksheet',title: 'Select a worksheet',   body: 'Choose which tab to use; sample data is used in the demo.' },
           { key: 'connectAlso',     title: 'Optional connections', body: 'You can also toggle CSV, POS, and other connectors.' },
           { key: 'agentStart',      title: 'Let the agent propose',body: 'Start the mission. The agent picks audience, offer, and timing.' },
           { key: 'agentActivity',   title: 'Progress & log',       body: 'Watch progress and see decisions logged in real time under guardrails.' },
@@ -1247,7 +1247,7 @@ function FlowDemo({
         anchors={{
           connectChoose:    anchorModalConnectChoose as React.RefObject<HTMLElement>,
           connectFile:      anchorModalConnectFile as React.RefObject<HTMLElement>,
-          connectWorksheet: anchorModalConnectWorksheet as React.RefObject<HTMLElement>,
+          // connectWorksheet: anchorModalConnectWorksheet as React.RefObject<HTMLElement>,
           connectAlso:      anchorModalConnectAlso as React.RefObject<HTMLElement>,
           agentStart:       anchorModalAgentStart as React.RefObject<HTMLElement>,
           agentActivity:    anchorModalAgentActivity as React.RefObject<HTMLElement>,
@@ -1278,7 +1278,13 @@ export default function InteractiveDemoPage() {
           <Sidebar active={screen} onChange={(s) => { setScreen(s); track("nav_click", { to: s }); }} />
         </aside>
         <div className="col-span-12 md:col-span-9">
-          <Header />
+          <Header
+            onStartFree={() => {
+              setScreen('flow');
+              setAutoStartFlow(true);
+              setAutoStartTour(true);
+            }}
+          />
           {screen === "agent" && <ModeToggle mode={mode} onChange={setMode} />}
           <main className="mt-6 space-y-8">
             {screen === "dashboard" && <LiveDashboard />}
@@ -1305,7 +1311,14 @@ export default function InteractiveDemoPage() {
       >
         <div className="overflow-hidden rounded-2xl ring-1 ring-neutral-200">
           {/* Hero */}
-          <div className="bg-gradient-to-br from-neutral-900 via-neutral-800 to-neutral-700 text-white p-6">
+          {/* <div className="bg-gradient-to-br from-neutral-900 via-neutral-800 to-neutral-700 text-white p-6"> */}
+          <div
+            className="text-white p-6"
+            style={{
+              background:
+                "linear-gradient(135deg, #050b2d 0%, #152567 35%, #3b2f91 65%, #6d45d3 85%, #b08cf8 100%)",
+            }}
+          >
             <div className="flex items-center gap-3">
               <div className="relative h-9 w-9">
                 <span className="absolute inset-0 rounded-full bg-white/10 blur-[6px]" />
@@ -1331,7 +1344,7 @@ export default function InteractiveDemoPage() {
         <div className="p-5 bg-white grid grid-cols-12 gap-6">
             <div className="col-span-12 md:col-span-7 space-y-4 text-sm">
               <div>
-                <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">Value proposition</div>
+                <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">Why teams choose this</div>
                 <div className="text-neutral-800">
                   Autonomously re‑engages customers and builds lasting relationships that drive predictable revenue growth — no manual work.
                 </div>
@@ -1423,7 +1436,7 @@ export default function InteractiveDemoPage() {
    Header & navigation
 -------------------------------------------------*/
 
-function Header() {
+function Header({ onStartFree }: { onStartFree: () => void }) {
   return (
     <header className="flex items-center justify-between">
       <div className="flex items-center gap-3">
@@ -1436,7 +1449,15 @@ function Header() {
       <div className="flex items-center gap-3">
         <div className="hidden sm:flex items-center gap-2">
           <button className="px-3 py-1 rounded-md border border-neutral-200 text-sm hover:bg-neutral-50" onClick={() => track("help_open")}>Help</button>
-          <button className="px-3 py-1 rounded-md bg-neutral-900 text-white text-sm flex items-center gap-2" onClick={() => track("cta_click", { where: "header_start_free" })}><IconUsers /> Start free</button>
+          <button
+            className="px-3 py-1 rounded-md bg-neutral-900 text-white text-sm flex items-center gap-2"
+            onClick={() => {
+              track("cta_click", { where: "header_start_free" });
+              onStartFree();
+            }}
+          >
+            <IconUsers /> Start free
+          </button>
         </div>
         <DemoBell />
       </div>
@@ -2226,7 +2247,7 @@ function AutonomousOpsAgent() {
       name: "Fetch segments from POS/Sheets",
       run: async () => {
         await wait(1200);
-        const pos = ["square", "toast", "shopifypos", "foodics"].filter(Boolean);
+        const pos = ["square", "toast", "shopify", "foodics"].filter(Boolean);
         return { connectors: pos, segmentCounts: segments.reduce((a, s) => ({ ...a, [s.id]: s.size }), {} as Record<string, number>) };
       },
     },

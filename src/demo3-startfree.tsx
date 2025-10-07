@@ -73,6 +73,12 @@ const IconCheckCircle = ({ size = 18 }: { size?: number }) => (
     <path d="M8 12l3 3 5-6" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
+const IconSquarePOS = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" className="stroke-current fill-current">
+    <rect x="2" y="2" width="20" height="20" rx="5" strokeWidth="1.8" fill="currentColor" opacity="0.1" />
+    <rect x="6.5" y="6.5" width="11" height="11" rx="2.5" strokeWidth="1.8" fill="none" />
+  </svg>
+);
 // const IconBot = ({ size = 18 }: { size?: number }) => (
 //   <svg width={size} height={size} viewBox="0 0 24 24" className="stroke-current">
 //     <rect x="3" y="7" width="18" height="12" rx="3" fill="none" strokeWidth="2" />
@@ -373,10 +379,12 @@ function RadioList<T extends string>({
 
 function CheckboxPill({
   label,
+  icon,
   on,
   onToggle,
 }: {
   label: string;
+  icon?: React.ReactNode;
   on: boolean;
   onToggle: () => void;
 }) {
@@ -384,13 +392,14 @@ function CheckboxPill({
     <button
       onClick={onToggle}
       className={[
-        "px-3 py-2 rounded-xl text-sm border",
+        "px-3 py-2 rounded-xl text-sm border inline-flex items-center gap-2",
         on
           ? "bg-neutral-900 text-white border-neutral-900"
           : "bg-neutral-100 text-neutral-800 border-neutral-200 hover:bg-neutral-200",
       ].join(" ")}
     >
-      {label}
+      {icon && <span className="text-current">{icon}</span>}
+      <span className="font-medium">{label}</span>
     </button>
   );
 }
@@ -626,8 +635,21 @@ function FlowDemo({
     toast: false,
     shopify: true,
     foodics: false,
+    hubspot: false,
   });
   const toggleConn = (k: string) => setConnections((c) => ({ ...c, [k]: !c[k] }));
+  const connectionOptions = useMemo(
+    () => [
+      { key: "csv", label: "Upload CSV", icon: <i className="fa-solid fa-file-arrow-up fa-sm" aria-hidden /> },
+      { key: "gsheet", label: "Google Sheets", icon: <i className="fa-brands fa-google-drive fa-sm" aria-hidden /> },
+      { key: "square", label: "Square", icon: <IconSquarePOS /> },
+      { key: "toast", label: "Toast POS", icon: <i className="fa-solid fa-bread-slice fa-sm" aria-hidden /> },
+      { key: "shopify", label: "Shopify", icon: <i className="fa-brands fa-shopify fa-sm" aria-hidden /> },
+      { key: "foodics", label: "Foodics", icon: <i className="fa-solid fa-utensils fa-sm" aria-hidden /> },
+      { key: "hubspot", label: "HubSpot", icon: <i className="fa-brands fa-hubspot fa-sm" aria-hidden /> },
+    ],
+    []
+  );
 
   // Onboarding tour anchors
   const anchorAudience = useRef<HTMLDivElement>(null);
@@ -938,12 +960,15 @@ function FlowDemo({
                     <div ref={anchorModalConnectAlso} className="pt-3 border-t">
                       <div className="text-xs font-medium text-neutral-700 mb-2">Also connect (optional)</div>
                       <div className="flex flex-wrap gap-2">
-                        <CheckboxPill label="Upload CSV" on={!!connections.csv} onToggle={() => toggleConn("csv")} />
-                        <CheckboxPill label="Google Sheets" on={!!connections.gsheet} onToggle={() => toggleConn("gsheet")} />
-                        <CheckboxPill label="Square" on={!!connections.square} onToggle={() => toggleConn("square")} />
-                        <CheckboxPill label="Toast POS" on={!!connections.toast} onToggle={() => toggleConn("toast")} />
-                        <CheckboxPill label="Shopify" on={!!connections.shopify} onToggle={() => toggleConn("shopify")} />
-                        <CheckboxPill label="Foodics" on={!!connections.foodics} onToggle={() => toggleConn("foodics")} />
+                        {connectionOptions.map((opt) => (
+                          <CheckboxPill
+                            key={opt.key}
+                            label={opt.label}
+                            icon={opt.icon}
+                            on={!!connections[opt.key]}
+                            onToggle={() => toggleConn(opt.key)}
+                          />
+                        ))}
                       </div>
                       <div className="text-xs text-neutral-500 mt-2">Demo only — no external data transmitted.</div>
                     </div>

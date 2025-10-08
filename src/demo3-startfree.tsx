@@ -1241,7 +1241,13 @@ function FlowDemo({
           { key: 'approve',         title: 'Finish — schedule it', body: 'Click Finish to schedule; you’ll return to the Dashboard to see results.' },
         ]}
         onNext={(curr, next) => {
-          if (!next || next === 'done') return;
+          if (!next) return;
+          if (next === 'done') {
+            if (curr === 'approve' && !done) {
+              approveAndSend();
+            }
+            return;
+          }
           // Start the agent when advancing from agentStart → agentActivity
           if (curr === 'agentStart' && next === 'agentActivity') {
             if (!agentRunning) {

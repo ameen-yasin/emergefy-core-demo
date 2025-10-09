@@ -134,8 +134,27 @@ declare global {
 
 const STORAGE_KEY = "emergefy_demo_state_v1";
 const OPS_HISTORY_KEY = "emergefy_ops_history_v1";
-const AVG_BASKET = 18;
-const DEFAULT_KPI: Kpi = { mrr: 4200, activePilots: 3, projectedLift: 12, last24: [5, 12, 8, 10, 6, 9, 7] };
+const AVG_BASKET = 29;
+const BASE_MRR = 68_500;
+const DEFAULT_KPI: Kpi = {
+  mrr: BASE_MRR,
+  activePilots: 8,
+  projectedLift: 18,
+  last24: [58, 74, 69, 81, 76, 83, 71],
+};
+
+const SEGMENT_PRESETS: Segment[] = [
+  { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 8_400, estReact: 0.11 },
+  { id: "vip", title: "VIP frequent", size: 4_600, estReact: 0.19 },
+  { id: "new-customers", title: "New customers (0–7 days)", size: 6_900, estReact: 0.16 },
+  { id: "low-value", title: "Low spenders", size: 11_500, estReact: 0.07 },
+];
+
+const OFFER_PRESETS: Offer[] = [
+  { id: "10-off", title: "10% off next order", marginImpact: -6, estLift: 0.1 },
+  { id: "bundle", title: "Meal bundle (save $3)", marginImpact: -3, estLift: 0.13 },
+  { id: "free-drink", title: "Free drink w/order $10+", marginImpact: -4, estLift: 0.09 },
+];
 
 /* 
 ------------------------------------------------
@@ -155,7 +174,9 @@ function wait(ms: number): Promise<void> { return new Promise((res) => setTimeou
 
 function recommendBestPair(segments: Segment[], offers: Offer[]) {
   const pairs = segments.flatMap((s) => offers.map((o) => ({
-    seg: s, off: o, score: Math.round(Math.max(s.estReact, o.estLift) * 100 + s.size / 10 - Math.abs(o.marginImpact)),
+    seg: s,
+    off: o,
+    score: Math.round(Math.max(s.estReact, o.estLift) * 100 + s.size / 1_000 - Math.abs(o.marginImpact)),
   })));
   return pairs.sort((a, b) => b.score - a.score)[0];
 }
@@ -608,23 +629,8 @@ function FlowDemo({
   const [tourActiveKey, setTourActiveKey] = useState<string | null>(null);
 
   // business data (unchanged)
-  const segments = useMemo<Segment[]>(
-    () => [
-      { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 120, estReact: 0.09 },
-      { id: "vip", title: "VIP frequent", size: 42, estReact: 0.12 },
-      { id: "new-customers", title: "New customers (0–7 days)", size: 85, estReact: 0.15 },
-      { id: "low-value", title: "Low spenders", size: 220, estReact: 0.03 },
-    ],
-    []
-  );
-  const offers = useMemo<Offer[]>(
-    () => [
-      { id: "10-off", title: "10% off next order", marginImpact: -6, estLift: 0.08 },
-      { id: "bundle", title: "Meal bundle (save $3)", marginImpact: -3, estLift: 0.1 },
-      { id: "free-drink", title: "Free drink w/order $10+", marginImpact: -4, estLift: 0.06 },
-    ],
-    []
-  );
+  const segments = useMemo<Segment[]>(() => SEGMENT_PRESETS.map((s) => ({ ...s })), []);
+  const offers = useMemo<Offer[]>(() => OFFER_PRESETS.map((o) => ({ ...o })), []);
   const { reactivated, revenue, seg, off } = computePreviewMetrics(segments, offers, selectedSegment, selectedOffer);
 
   // trimmed connections (your list)
@@ -687,8 +693,8 @@ function FlowDemo({
       simHistory.unshift(record);
       obj.simHistory = simHistory.slice(0, 20);
 
-      const kpi: Kpi = obj.kpi || { mrr: 4200, activePilots: 3, projectedLift: 12, last24: [] };
-      kpi.mrr = Math.max(4200, (kpi.mrr || 4200) + Math.round(reactivated * 2));
+      const kpi: Kpi = obj.kpi || { ...DEFAULT_KPI };
+      kpi.mrr = Math.max(BASE_MRR, (kpi.mrr || BASE_MRR) + Math.round(reactivated * 2));
       obj.kpi = kpi;
 
       localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
@@ -1663,17 +1669,8 @@ function PersonaCard({ reasoningVisible, setReasoningVisible, paused, setPaused 
 }
 
 function OpsCopilot() {
-  const segments = useMemo<Segment[]>(() => [
-    { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 120, estReact: 0.09 },
-    { id: "vip", title: "VIP frequent", size: 42, estReact: 0.12 },
-    { id: "new-customers", title: "New customers (0–7 days)", size: 85, estReact: 0.15 },
-    { id: "low-value", title: "Low spenders", size: 220, estReact: 0.03 },
-  ], []);
-  const offers = useMemo<Offer[]>(() => [
-    { id: "10-off", title: "10% off next order", marginImpact: -6, estLift: 0.08 },
-    { id: "bundle", title: "Meal bundle (save $3)", marginImpact: -3, estLift: 0.1 },
-    { id: "free-drink", title: "Free drink w/order $10+", marginImpact: -4, estLift: 0.06 },
-  ], []);
+  const segments = useMemo<Segment[]>(() => SEGMENT_PRESETS.map((s) => ({ ...s })), []);
+  const offers = useMemo<Offer[]>(() => OFFER_PRESETS.map((o) => ({ ...o })), []);
 
   const initialPick = useMemo(() => recommendBestPair(segments, offers), [segments, offers]);
 
@@ -1696,18 +1693,18 @@ function OpsCopilot() {
 
   // 1) Sample ops history (memoized for stable identity)
   const sampleOpsHistory: OpsRun[] = useMemo(() => ([
-    { id: "cof-0001", time: 1764891600000, segment: "Commuter morning (14d)",     offer: "BOGO medium coffee",               reactivated: 260, revenue: 2080 },
-    { id: "cof-0002", time: 1764888000000, segment: "App-lapsed 30–60d",          offer: "Coffee + donut ($2 off)",          reactivated: 190, revenue: 1520 },
-    { id: "cof-0003", time: 1764884400000, segment: "Afternoon lull (2–5pm)",     offer: "Free Timbits with any drink",      reactivated: 120, revenue: 960  },
-    { id: "cof-0004", time: 1764880800000, segment: "VIP frequent (AM)",          offer: "Any medium for $1.49 (app)",       reactivated: 210, revenue: 1680 },
-    { id: "cof-0005", time: 1764877200000, segment: "Lapsed breakfast buyers",    offer: "Breakfast combo save $3",          reactivated: 300, revenue: 2400 },
-    { id: "cof-0006", time: 1764873600000, segment: "Drive-thru heavy routes",    offer: "BOGO medium coffee",               reactivated: 180, revenue: 1440 },
-    { id: "cof-0007", time: 1764870000000, segment: "Midweek office clusters",    offer: "Donut dozen add-on ($3 off)",      reactivated: 240, revenue: 1920 },
-    { id: "cof-0008", time: 1764866400000, segment: "Weekend late breakfast",     offer: "Free Timbits with any drink",      reactivated: 150, revenue: 1200 },
-    { id: "cof-0009", time: 1764862800000, segment: "Cold brew seekers (warm)",   offer: "BOGO cold brew",                    reactivated: 320, revenue: 2560 },
-    { id: "cof-0010", time: 1764859200000, segment: "Price-sensitive low spenders", offer: "Any medium for $1.49 (app)",     reactivated: 200, revenue: 1600 },
-    { id: "cof-0011", time: 1764855600000, segment: "Evening snackers",           offer: "Munchkins/Timbits 20-pack $1 off", reactivated: 275, revenue: 2200 },
-    { id: "cof-0012", time: 1764852000000, segment: "Store-radius (1–3 mi) lapsed", offer: "Coffee + donut ($2 off)",        reactivated: 165, revenue: 1320 },
+    { id: "cof-0001", time: 1764891600000, segment: "Commuter morning (14d)",     offer: "BOGO medium coffee",               reactivated: 1_360, revenue: 39_440 },
+    { id: "cof-0002", time: 1764888000000, segment: "App-lapsed 30–60d",          offer: "Coffee + donut ($2 off)",          reactivated: 980,  revenue: 28_420 },
+    { id: "cof-0003", time: 1764884400000, segment: "Afternoon lull (2–5pm)",     offer: "Free Timbits with any drink",      reactivated: 820,  revenue: 23_780 },
+    { id: "cof-0004", time: 1764880800000, segment: "VIP frequent (AM)",          offer: "Any medium for $1.49 (app)",       reactivated: 1_150, revenue: 33_350 },
+    { id: "cof-0005", time: 1764877200000, segment: "Lapsed breakfast buyers",    offer: "Breakfast combo save $3",          reactivated: 1_420, revenue: 41_180 },
+    { id: "cof-0006", time: 1764873600000, segment: "Drive-thru heavy routes",    offer: "BOGO medium coffee",               reactivated: 940,  revenue: 27_260 },
+    { id: "cof-0007", time: 1764870000000, segment: "Midweek office clusters",    offer: "Donut dozen add-on ($3 off)",      reactivated: 1_180, revenue: 34_220 },
+    { id: "cof-0008", time: 1764866400000, segment: "Weekend late breakfast",     offer: "Free Timbits with any drink",      reactivated: 880,  revenue: 25_520 },
+    { id: "cof-0009", time: 1764862800000, segment: "Cold brew seekers (warm)",   offer: "BOGO cold brew",                   reactivated: 1_460, revenue: 42_340 },
+    { id: "cof-0010", time: 1764859200000, segment: "Price-sensitive low spenders", offer: "Any medium for $1.49 (app)",     reactivated: 1_020, revenue: 29_580 },
+    { id: "cof-0011", time: 1764855600000, segment: "Evening snackers",           offer: "Munchkins/Timbits 20-pack $1 off", reactivated: 1_300, revenue: 37_700 },
+    { id: "cof-0012", time: 1764852000000, segment: "Store-radius (1–3 mi) lapsed", offer: "Coffee + donut ($2 off)",        reactivated: 910,  revenue: 26_390 },
   ]), []);
 
   // // 2) Create a loader that updates state + localStorage
@@ -1801,8 +1798,8 @@ useEffect(() => { try { localStorage.setItem(OPS_HISTORY_KEY, JSON.stringify(sam
       const simHistory: SimRecord[] = Array.isArray(obj.simHistory) ? obj.simHistory : [];
       simHistory.unshift({ id: String(Date.now()), time: Date.now(), audience: seg.size, reactivated, type: off.id });
       obj.simHistory = simHistory.slice(0, 20);
-      const kpi = (obj.kpi as Kpi) || { mrr: 4200, activePilots: 3, projectedLift: 12, last24: [] };
-      kpi.mrr = Math.max(4200, (kpi.mrr || 4200) + Math.round(reactivated * 2));
+      const kpi = (obj.kpi as Kpi) || { ...DEFAULT_KPI };
+      kpi.mrr = Math.max(BASE_MRR, (kpi.mrr || BASE_MRR) + Math.round(reactivated * 2));
       obj.kpi = kpi;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
       track("agent_expert_approve", { segment: seg.id, offer: off.id, reactivated });
@@ -1998,17 +1995,8 @@ function BigNumber({ label, value }: { label: string; value: string | number }) 
 
 function OpsCopilotSimple() {
   // Reuse your business data
-  const segments = useMemo<Segment[]>(() => [
-    { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 120, estReact: 0.09 },
-    { id: "vip", title: "VIP frequent", size: 42, estReact: 0.12 },
-    { id: "new-customers", title: "New customers (0–7 days)", size: 85, estReact: 0.15 },
-    { id: "low-value", title: "Low spenders", size: 220, estReact: 0.03 },
-  ], []);
-  const offers = useMemo<Offer[]>(() => [
-    { id: "10-off",   title: "10% off next order",        marginImpact: -6, estLift: 0.08 },
-    { id: "bundle",   title: "Meal bundle (save $3)",     marginImpact: -3, estLift: 0.10 },
-    { id: "free-drink", title: "Free drink on $10+",      marginImpact: -4, estLift: 0.06 },
-  ], []);
+  const segments = useMemo<Segment[]>(() => SEGMENT_PRESETS.map((s) => ({ ...s })), []);
+  const offers = useMemo<Offer[]>(() => OFFER_PRESETS.map((o) => ({ ...o })), []);
 
   // Default to an agent-recommended pair, but user can click pills to change
   const initial = useMemo(() => recommendBestPair(segments, offers), [segments, offers]);
@@ -2050,7 +2038,7 @@ function OpsCopilotSimple() {
       sim.unshift({ id: run.id, time: run.time, audience: seg.size, reactivated, type: off.id });
       obj.simHistory = sim.slice(0, 20);
       obj.kpi = obj.kpi || { ...DEFAULT_KPI };
-      obj.kpi.mrr = Math.max(4200, (obj.kpi.mrr || 4200) + Math.round(reactivated * 2));
+      obj.kpi.mrr = Math.max(BASE_MRR, (obj.kpi.mrr || BASE_MRR) + Math.round(reactivated * 2));
       localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
     } catch {
       // ignore
@@ -2240,17 +2228,8 @@ function HeartBadge() {
 
 function AutonomousOpsAgent() {
   // Business primitives (reuse your demo segments/offers)
-  const segments = useMemo<Segment[]>(() => [
-    { id: "recent-lapsed", title: "Lapsed (30–60 days)", size: 120, estReact: 0.09 },
-    { id: "vip",           title: "VIP frequent",        size: 42,  estReact: 0.12 },
-    { id: "new-customers", title: "New customers (0–7 days)", size: 85, estReact: 0.15 },
-    { id: "low-value",     title: "Low spenders",        size: 220, estReact: 0.03 },
-  ], []);
-  const offers = useMemo<Offer[]>(() => [
-    { id: "10-off",     title: "10% off next order",        marginImpact: -6, estLift: 0.08 },
-    { id: "bundle",     title: "Meal bundle (save $3)",     marginImpact: -3, estLift: 0.10 },
-    { id: "free-drink", title: "Free drink w/order $10+",   marginImpact: -4, estLift: 0.06 },
-  ], []);
+  const segments = useMemo<Segment[]>(() => SEGMENT_PRESETS.map((s) => ({ ...s })), []);
+  const offers = useMemo<Offer[]>(() => OFFER_PRESETS.map((o) => ({ ...o })), []);
 
   // Agent state
   const [, setPhase] = useState<Phase>("plan");
@@ -2446,7 +2425,7 @@ function addToolCall(name: string, input: Record<string, unknown>, _preview?: { 
         sim.unshift({ id: run.id, time: run.time, audience: segObj.size, reactivated: run.reactivated, type: offObj.id });
         obj.simHistory = sim.slice(0, 20);
         obj.kpi = obj.kpi || { ...DEFAULT_KPI };
-        obj.kpi.mrr = Math.max(4200, (obj.kpi.mrr || 4200) + Math.round(run.reactivated * 2));
+        obj.kpi.mrr = Math.max(BASE_MRR, (obj.kpi.mrr || BASE_MRR) + Math.round(run.reactivated * 2));
         localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
       } catch {
         // ignore
@@ -2619,7 +2598,7 @@ function addToolCall(name: string, input: Record<string, unknown>, _preview?: { 
 -------------------------------------------------*/
 
 function ImpactSummary() {
-  const [summary, setSummary] = useState({ revenue: 4220, retained: 11, optimized: 8 });
+  const [summary, setSummary] = useState({ revenue: 0, retained: 0, optimized: 0 });
   const [scenario, setScenario] = useState<string>("");
   useEffect(() => {
     let mounted = true;
@@ -2629,7 +2608,7 @@ function ImpactSummary() {
         const raw = localStorage.getItem(STORAGE_KEY) || "{}";
         const obj = JSON.parse(raw);
         const sim: SimRecord[] = Array.isArray(obj.simHistory) ? obj.simHistory : [];
-        const extraRevenue = Math.max(0, (obj.kpi?.mrr || 4200) - 4200);
+        const extraRevenue = Math.max(0, (obj.kpi?.mrr || BASE_MRR) - BASE_MRR);
         const retained = sim.reduce((a, r) => a + (r.reactivated || 0), 0);
         const optimized = Math.max(0, Math.min(50, Math.round(sim.filter((r) => r?.type).length)));
         if (mounted) {
@@ -2647,20 +2626,20 @@ function ImpactSummary() {
       const cfg = brand === "Dunkin"
         ? {
             scenarioName: "Dunkin — Grand Opening + Drive‑Thru Blitz",
-            reactivations: [150, 144, 140, 138, 135, 132, 128, 124, 120, 118, 115, 112, 110, 108, 105, 102, 100, 96, 92, 90, 88, 85, 82, 80, 78, 76, 74, 72, 70, 68],
-            audienceStart: 1800,
-            audienceStep: 20,
-            activePilots: 6,
-            projectedLift: 31,
+            reactivations: [1500, 1480, 1460, 1430, 1400, 1380, 1350, 1320, 1290, 1260, 1230, 1200, 1180, 1150, 1120, 1090, 1060, 1040, 1010, 980, 950, 930, 900, 880, 860, 840, 820, 800, 780, 760],
+            audienceStart: 8_200,
+            audienceStep: 60,
+            activePilots: 9,
+            projectedLift: 26,
             type: "Dunkin Drive‑Thru Blitz",
           }
         : {
             scenarioName: "Tim Hortons — Loyalty Relaunch Weekend",
-            reactivations: [120, 118, 116, 114, 110, 108, 104, 100, 98, 96, 94, 90, 88, 85, 82, 80, 78, 76, 74, 72, 70, 68, 66, 64, 62, 60],
-            audienceStart: 1400,
-            audienceStep: 15,
-            activePilots: 4,
-            projectedLift: 24,
+            reactivations: [1280, 1250, 1230, 1210, 1180, 1160, 1130, 1100, 1080, 1050, 1020, 1000, 980, 960, 930, 910, 890, 870, 850, 830, 810, 790, 770, 750, 730, 710],
+            audienceStart: 7_100,
+            audienceStep: 50,
+            activePilots: 7,
+            projectedLift: 21,
             type: "Tims Loyalty Relaunch",
           };
 
@@ -2678,7 +2657,7 @@ function ImpactSummary() {
       const obj = JSON.parse(objRaw || "{}");
       obj.simHistory = simHistory;
       obj.kpi = {
-        mrr: 4200 + extraRevenue,
+        mrr: BASE_MRR + extraRevenue,
         activePilots: cfg.activePilots,
         projectedLift: cfg.projectedLift,
         last24: cfg.reactivations.slice(0, 7).map((n) => Math.max(1, Math.round(n / 10))),

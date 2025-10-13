@@ -684,6 +684,21 @@ function FlowDemo({
   const nextStep = () => openStep(modalStep + 1);
   const prevStep = () => openStep(modalStep - 1);
 
+
+  // helper: safely notify parent LP when we’re inside an iframe
+  function notifyLandingOfCompletion(payload: { segment: string; offer: string; revenue: number }) {
+    try {
+      if (typeof window === "undefined") return;
+      // Only post to parent if this page is embedded (iframe)
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "demoComplete", payload }, "*");
+      }
+    } catch {
+      // no-op
+    }
+  }
+
+ 
   function approveAndSend() {
     const record: SimRecord = { id: String(Date.now()), time: Date.now(), audience: seg.size, reactivated, type: selectedOffer || "unknown" };
     try {
@@ -700,10 +715,15 @@ function FlowDemo({
       localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
       track("flow_approve_send", { segment: selectedSegment, offer: selectedOffer, reactivated, when: scheduling.when, channel: scheduling.channel });
 
-      setDone({ audience: seg.size, reactivated, revenue, segment: seg.title, offer: off.title, when: scheduling.when, channel: scheduling.channel });
+      const completed = { audience: seg.size, reactivated, revenue, segment: seg.title, offer: off.title, when: scheduling.when, channel: scheduling.channel };
+      setDone(completed);
       setModalOpen(true);
+
+      // 🔔 NEW: immediately notify the LP if embedded
+      notifyLandingOfCompletion({ segment: completed.segment, offer: completed.offer, revenue: completed.revenue });
     } catch {/* noop */}
   }
+
 
   // Auto-start the modal flow when requested
   useEffect(() => {
@@ -1803,6 +1823,17 @@ useEffect(() => { try { localStorage.setItem(OPS_HISTORY_KEY, JSON.stringify(sam
       obj.kpi = kpi;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
       track("agent_expert_approve", { segment: seg.id, offer: off.id, reactivated });
+      // NEW: notify landing page
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(
+          {
+            type: "demoComplete",
+            payload: { segment: seg.title, offer: off.title, revenue },
+          },
+          "*" // or a strict origin like "https://you.com"
+        );
+      }
+      // onFinished?.(); // unchanged
     } catch (err) { console.error(err); }
   }
 

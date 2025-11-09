@@ -11,7 +11,7 @@ import React, {
 
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
-import introGif from "./assets/play.gif";
+// import introGif from "./assets/play.gif";
 
 const IconX = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" className="stroke-current">
@@ -471,9 +471,9 @@ function InputLike({ placeholder, value }: { placeholder: string; value?: string
   );
 }
 
-/* ===================== Full Playbooks flow (Connection → Agent → Review) ===================== */
+/* ===================== Full Engagement Flows flow (Connection → Agent → Review) ===================== */
 
-/** Lightweight guided overlay for Playbooks onboarding */
+/** Lightweight guided overlay for Engagement Flows onboarding */
 function FlowTourOverlay({
   open,
   onClose,
@@ -798,7 +798,7 @@ function FlowDemo({
       <div className="flex items-center justify-between mb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h3 className="text-xl font-semibold tracking-tight">Playbooks</h3>
+            <h3 className="text-xl font-semibold tracking-tight">Engagement Flows</h3>
             <span className="px-2 py-0.5 rounded-full text-[11px] bg-neutral-900 text-white">Onboarding</span>
           </div>
           <p className="text-sm text-neutral-500 mt-1">Connection → Agent → Review.</p>
@@ -1430,19 +1430,23 @@ export default function InteractiveDemoPage() {
               </div>
               <div className="text-xs text-neutral-500">Demo only — no external data is transmitted.</div>
             </div>
-            <div className="col-span-12 md:col-span-5">
+            {/* <div className="col-span-12 md:col-span-5">
               <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-2 overflow-hidden">
                 <div className="aspect-video rounded-md overflow-hidden bg-neutral-200">
                   <img src={introGif} alt="Demo intro" className="h-full w-full object-cover" />
                 </div>
                 <div className="mt-3 p-3 rounded-xl border border-neutral-200 bg-white">
-                  <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">Showcase</div>
+
+                <div className="font-medium">Emergefy does the work, so you win back guests without lifting a finger</div> */}
+
+                  {/* <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">Showcase</div>
                   <div className="font-medium">New Customer Onboarding</div>
                   <ul className="list-disc pl-5 mt-1 text-sm text-neutral-700 space-y-1">
                     <li>Welcome new guests with a gentle intro</li>
                     <li>Nudge a first order within 7 days</li>
                     <li>Track activation and early retention</li>
                   </ul>
+                   */}
                   {/* <div className="mt-2">
                     <button
                       onClick={() => { setWelcomeOpen(false); setScreen('flow'); setAutoStartFlow(true); track('welcome_showcase_onboarding'); }}
@@ -1451,9 +1455,9 @@ export default function InteractiveDemoPage() {
                       Explore in demo
                     </button>
                   </div> */}
-                </div>
+                {/* </div>
               </div>
-            </div>
+            </div> */}
 
             {/* Actions */}
             <div className="col-span-12 flex items-center justify-end pt-2">
@@ -1560,7 +1564,7 @@ function ModeToggle({
 function Sidebar({ active, onChange }: { active: "agent" | "flow" | "dashboard"; onChange: (s: "agent" | "flow" | "dashboard") => void }) {
   const items: { key: "dashboard" | "flow" | "agent"; label: string }[] = [
     { key: "dashboard", label: "Impact" },
-    { key: "flow", label: "Playbooks" },
+    { key: "flow", label: "Engagement Flows" },
     { key: "agent", label: "Ops Copilot" },
   ];
   return (
@@ -1581,7 +1585,7 @@ function MobileNav({ active, onChange }: { active: "agent" | "flow" | "dashboard
     <div className="fixed bottom-4 left-0 right-0 z-40 flex justify-center md:hidden">
       <div className="w-[92%] rounded-2xl bg-white border border-neutral-200 p-2 flex justify-between shadow-sm">
         <button onClick={() => onChange("dashboard")} className={`px-3 py-2 rounded-xl ${active === "dashboard" ? "bg-neutral-50" : ""}`}>Impact</button>
-        <button onClick={() => onChange("flow")} className={`px-3 py-2 rounded-xl ${active === "flow" ? "bg-neutral-50" : ""}`}>Playbooks</button>
+        <button onClick={() => onChange("flow")} className={`px-3 py-2 rounded-xl ${active === "flow" ? "bg-neutral-50" : ""}`}>Engagement Flows</button>
         <button onClick={() => onChange("agent")} className={`px-3 py-2 rounded-xl ${active === "agent" ? "bg-neutral-50" : ""}`}>Copilot</button>
       </div>
     </div>
@@ -2819,7 +2823,7 @@ function LiveDashboard() {
       </div>
       <div className="mt-4 grid md:grid-cols-2 gap-4">
         <div className="p-4 rounded-2xl border border-neutral-200 bg-white"><div className="font-semibold">Recent events</div><RecentEvents /></div>
-        <div className="p-4 rounded-2xl border border-neutral-200 bg-white"><div className="font-semibold">Demo tips</div><ul className="mt-2 text-sm space-y-2 text-neutral-600"><li>Toggle reasoning for different audiences.</li><li>Use Playbooks for fast, safe defaults.</li><li>Show verification checks before approve.</li></ul></div>
+        <div className="p-4 rounded-2xl border border-neutral-200 bg-white"><div className="font-semibold">Demo tips</div><ul className="mt-2 text-sm space-y-2 text-neutral-600"><li>Toggle reasoning for different audiences.</li><li>Use Engagement Flows for fast, safe defaults.</li><li>Show verification checks before approve.</li></ul></div>
       </div>
     </section>
   );
